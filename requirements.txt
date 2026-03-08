@@ -2,3 +2,5 @@ streamlit
 httpx
 openai
 pydantic
+pymupdf
+python-docx
