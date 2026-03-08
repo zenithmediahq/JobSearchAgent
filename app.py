@@ -5,6 +5,9 @@ import urllib.parse
 import httpx
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
+from io import BytesIO
+import fitz  # pymupdf
+from docx import Document  # python-docx
 
 # -------------------------
 # Inställningar
@@ -25,6 +28,8 @@ class JobListing(BaseModel):
     company: str
     location: str
     description: str
+    work_mode: str | None = None
+    employment_type: str | None = None
     application_url: str | None = None
     source_platform: str | None = None
     match_score: int | None = None
@@ -43,10 +48,26 @@ class ScoringResult(BaseModel):
     scored_jobs: list[ScoredJob]
 
 # -------------------------
+# Hjälpfunktion för att läsa CV-filer
+# -------------------------
+def extract_text_from_upload(uploaded_file) -> str:
+    """Extraherar text från PDF, Word eller TXT-filer."""
+    file_bytes = uploaded_file.read()
+    filename = uploaded_file.name.lower()
+    
+    if filename.endswith(".pdf"):
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        return "\n".join([page.get_text() for page in doc]).strip()
+    elif filename.endswith((".docx", ".doc")):
+        doc = Document(BytesIO(file_bytes))
+        return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+    else:
+        return file_bytes.decode("utf-8", errors="replace")
+
+# -------------------------
 # AI och Sök-funktioner
 # -------------------------
 def get_api_key(secret_name):
-    """Hämtar nycklar från Streamlits inbyggda valv."""
     try:
         return st.secrets[secret_name]
     except Exception:
@@ -81,7 +102,7 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
         response = await client.beta.chat.completions.parse(
             model=AI_MODEL,
             messages=[
-                {"role": "system", "content": "Extrahera alla jobbannonser. Identifiera titel, företag, plats, länk och beskrivning."},
+                {"role": "system", "content": "Extrahera alla jobbannonser. Identifiera titel, företag, plats, länk, arbetsform (distans/hybrid/på plats), anställningstyp (heltid/deltid) och beskrivning."},
                 {"role": "user", "content": f"URL: {url}\n\nInnehåll:\n{markdown}"}
             ],
             response_format=JobListings
@@ -93,7 +114,6 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
 
 async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobListing]:
     if not jobs: return []
-    
     job_summaries = [f"[{i}] {j.title} @ {j.company} | {j.description[:2000]}" for i, j in enumerate(jobs)]
     
     client = get_ai_client()
@@ -103,9 +123,9 @@ async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobLis
             messages=[
                 {
                     "role": "system",
-                    "content": "Du är en stenhård rekryterare. Betygsätt varje jobb 0-100 baserat på kandidatens CV. Var kritisk. 0-39 poäng om nyckelkrav saknas. Ge kort, ärlig motivering på svenska."
+                    "content": "Du är en stenhård rekryterare. Betygsätt varje jobb 0-100 baserat på hur väl kandidatens CV matchar kraven. Ge kort motivering på svenska."
                 },
-                {"role": "user", "content": f"Kandidat:\n{skills}\n\nJobbannonser:\n{chr(10).join(job_summaries)}"}
+                {"role": "user", "content": f"Kandidatens CV:\n{skills}\n\nJobbannonser:\n{chr(10).join(job_summaries)}"}
             ],
             response_format=ScoringResult,
         )
@@ -139,7 +159,6 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
         for j in extracted: j.source_platform = source["platform"]
         return extracted
 
-    # Kör alla webbsidor samtidigt!
     results = await asyncio.gather(*(process_source(s) for s in sources))
     
     # Dubblettfilter
@@ -160,36 +179,71 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
 # WEBBGRÄNSSNITT (UI)
 # -------------------------
 st.title("💼 Din Personliga AI-Rekryterare")
-st.markdown("Fyll i dina sökkriterier och klistra in ditt CV nedan. AI:n skannar de största plattformarna och matchar annonserna mot din erfarenhet.")
+st.markdown("Ladda upp ditt CV och fyll i vad du letar efter. AI:n skannar marknaden, filtrerar bort bruset och presenterar endast jobben som passar dig.")
 
+# --- SIDOPANEL: INSTÄLLNINGAR & FILTER ---
 with st.sidebar:
     st.header("🔍 Sökinställningar")
     query = st.text_input("Jobbtitel / Sökord", value="IT support")
     location = st.text_input("Plats", value="Skåne")
     min_score = st.slider("Lägsta AI-matchning (%)", 0, 100, 40, 5)
-    st.info("Skannar: Platsbanken, LinkedIn, Indeed & JobbSafari")
+    
+    st.markdown("---")
+    st.header("⚙️ Smarta Filter")
+    filter_remote = st.checkbox("🏠 Visa endast Distans/Hybrid")
+    filter_fulltime = st.checkbox("⏱️ Visa endast Heltid")
 
-st.subheader("📄 Din profil / Ditt CV")
-cv_text = st.text_area("Klistra in ditt CV eller en beskrivning av din erfarenhet här:", height=200)
+# --- HUVUDYTA: LADD UPP CV ---
+st.subheader("📄 Ladda upp din profil")
+uploaded_file = st.file_uploader("Dra och släpp ditt CV här (PDF eller Word)", type=["pdf", "docx", "doc", "txt"])
+cv_text_input = st.text_area("...eller klistra in din text manuellt:", height=100)
 
+# Bestäm vilken text vi använder
+final_cv_text = ""
+if uploaded_file is not None:
+    final_cv_text = extract_text_from_upload(uploaded_file)
+    st.success(f"✅ Filen '{uploaded_file.name}' inläst och redo!")
+elif cv_text_input.strip():
+    final_cv_text = cv_text_input.strip()
+
+# --- SÖKKNAPP ---
 if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True):
-    if not cv_text.strip():
-        st.warning("⚠️ Du måste klistra in ditt CV först!")
+    if not final_cv_text.strip():
+        st.warning("⚠️ Du måste antingen ladda upp ditt CV eller klistra in texten först!")
     else:
         with st.spinner("🤖 Agenten söker av nätet och läser annonser... (Tar ca 30-60 sek)"):
             try:
-                # Startar det asynkrona AI-flödet i bakgrunden
-                jobs = asyncio.run(run_search_workflow(query, location, cv_text, min_score))
+                # Hämta alla jobb som klarar min_score
+                all_found_jobs = asyncio.run(run_search_workflow(query, location, final_cv_text, min_score))
                 
-                if not jobs:
-                    st.info("🤷‍♂️ Hittade inga jobb som matchade dina strikta krav. Prova att sänka procent-spärren.")
-                else:
-                    st.success(f"✅ Sökning klar! Hittade {len(jobs)} unika jobb över {min_score}% matchning.")
+                # --- APPLICERA EXTRA FILTER (Distans & Heltid) ---
+                filtered_jobs = []
+                for job in all_found_jobs:
+                    # Kontrollera distans/hybrid
+                    if filter_remote:
+                        wm = str(job.work_mode).lower()
+                        if "distans" not in wm and "hybrid" not in wm and "remote" not in wm:
+                            continue # Hoppa över detta jobb
                     
-                    for job in jobs:
+                    # Kontrollera heltid
+                    if filter_fulltime:
+                        et = str(job.employment_type).lower()
+                        if "heltid" not in et and "full-time" not in et and "full time" not in et:
+                            continue # Hoppa över detta jobb
+                            
+                    filtered_jobs.append(job)
+                
+                # --- PRESENTATION ---
+                if not filtered_jobs:
+                    st.info("🤷‍♂️ Hittade inga jobb som klarade både matchningskravet och dina valda filter. Prova att ändra filtren!")
+                else:
+                    st.success(f"✅ Sökning klar! Hittade {len(filtered_jobs)} unika jobb som passar dina krav.")
+                    
+                    for job in filtered_jobs:
                         score = job.match_score or 0
                         color = "🟢" if score >= 80 else "🟡" if score >= 60 else "🔴"
                         
+                        # Fixa saknade länkar
                         link = job.application_url
                         if not link or str(link).lower() == "none":
                             c_enc, t_enc = urllib.parse.quote(job.company), urllib.parse.quote(job.title)
@@ -197,11 +251,23 @@ if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True
                             link_label = "🔍 Googla jobbet (Länk saknas)"
                         else:
                             link_label = "🔗 Gå till ansökan"
+                            
+                        # Extra badges för arbetsform och anställningstyp
+                        badges = []
+                        if job.work_mode and job.work_mode.lower() != "none":
+                            badges.append(f"🏠 {job.work_mode}")
+                        if job.employment_type and job.employment_type.lower() != "none":
+                            badges.append(f"⏱️ {job.employment_type}")
+                        badge_str = " | ".join(badges)
 
                         with st.expander(f"{color} [{score}%] {job.title} @ {job.company}"):
                             c1, c2 = st.columns(2)
                             c1.write(f"**📍 Plats:** {job.location}")
                             c2.write(f"**🌐 Källa:** {job.source_platform}")
+                            
+                            if badge_str:
+                                st.write(f"**Upplägg:** {badge_str}")
+                                
                             st.info(f"**💡 AI-Motivering:** {job.match_reason}")
                             st.markdown(f"[{link_label}]({link})")
             except Exception as e:
