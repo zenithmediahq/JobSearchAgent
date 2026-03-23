@@ -1,11 +1,12 @@
 import streamlit as st
 import asyncio
 import logging
+import csv
 import urllib.parse
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from openai import AsyncOpenAI
-from io import BytesIO
+from io import BytesIO, StringIO
 import fitz  # pymupdf
 from docx import Document  # python-docx
 
@@ -142,6 +143,38 @@ async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobLis
     
     return jobs
 
+def jobs_to_csv(jobs: list[JobListing]) -> str:
+    """Konverterar jobblistan till CSV-format."""
+    output = StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "Title",
+        "Company",
+        "Location",
+        "Work Mode",
+        "Employment Type",
+        "Match Score",
+        "Match Reason",
+        "Application Link",
+        "Source"
+    ])
+
+    for job in jobs:
+        writer.writerow([
+            job.title or "",
+            job.company or "",
+            job.location or "",
+            job.work_mode or "",
+            job.employment_type or "",
+            job.match_score if job.match_score is not None else "",
+            job.match_reason or "",
+            job.application_url or f"https://www.google.com/search?q={urllib.parse.quote(job.company)}+{urllib.parse.quote(job.title)}+jobb",
+            job.source_platform or ""
+        ])
+
+    return output.getvalue()
+
 async def run_search_workflow(query: str, location: str, skills: str, min_score: int):
     q_enc = urllib.parse.quote(query)
     l_enc = urllib.parse.quote(location)
@@ -238,7 +271,16 @@ if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True
                     st.info("🤷‍♂️ Hittade inga jobb som klarade både matchningskravet och dina valda filter. Prova att ändra filtren!")
                 else:
                     st.success(f"✅ Sökning klar! Hittade {len(filtered_jobs)} unika jobb som passar dina krav.")
-                    
+
+                    csv_data = jobs_to_csv(filtered_jobs)
+                    st.download_button(
+                        label="📥 Ladda ner resultat som CSV",
+                        data=csv_data,
+                        file_name="job_results.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+
                     for job in filtered_jobs:
                         score = job.match_score or 0
                         color = "🟢" if score >= 80 else "🟡" if score >= 60 else "🔴"
