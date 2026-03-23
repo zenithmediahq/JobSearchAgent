@@ -34,7 +34,9 @@ class JobListing(BaseModel):
     application_url: str | None = None
     source_platform: str | None = None
     match_score: int | None = None
-    match_reason: str | None = None
+    match_strengths: list[str] | None = None
+    match_gaps: list[str] | None = None
+    match_recommendation: str | None = None
 
 
 class JobListings(BaseModel):
@@ -45,7 +47,9 @@ class JobListings(BaseModel):
 class ScoredJob(BaseModel):
     index: int
     score: int
-    reason: str
+    strengths: list[str]
+    gaps: list[str]
+    recommendation: str
 
 
 class ScoringResult(BaseModel):
@@ -158,13 +162,23 @@ async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobLis
                 {
                     "role": "system",
                     "content": (
-                        "Du är en stenhård rekryterare. Betygsätt varje jobb 0-100 baserat på "
-                        "hur väl kandidatens CV matchar kraven. Ge kort motivering på svenska."
+                        "Du är en stenhård rekryterare. "
+                        "Betygsätt varje jobb 0-100 baserat på hur väl kandidatens CV matchar kraven. "
+                        "Returnera för varje jobb:\n"
+                        "- score: ett heltal 0-100\n"
+                        "- strengths: 2 till 4 korta styrkor på svenska\n"
+                        "- gaps: 2 till 4 korta brister eller saknade krav på svenska\n"
+                        "- recommendation: 1 kort rekommendation på svenska\n\n"
+                        "Var kritisk. Hitta inte på erfarenhet som inte finns i CV:t. "
+                        "Håll allt kort, tydligt och konkret."
                     ),
                 },
                 {
                     "role": "user",
-                    "content": f"Kandidatens CV:\n{skills}\n\nJobbannonser:\n{chr(10).join(job_summaries)}",
+                    "content": (
+                        f"Kandidatens CV:\n{skills}\n\n"
+                        f"Jobbannonser:\n{chr(10).join(job_summaries)}"
+                    ),
                 },
             ],
             response_format=ScoringResult,
@@ -174,8 +188,11 @@ async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobLis
 
         for i, job in enumerate(jobs):
             if i in score_map:
-                job.match_score = score_map[i].score
-                job.match_reason = score_map[i].reason
+                scored = score_map[i]
+                job.match_score = scored.score
+                job.match_strengths = scored.strengths
+                job.match_gaps = scored.gaps
+                job.match_recommendation = scored.recommendation
 
         jobs.sort(key=lambda j: j.match_score or 0, reverse=True)
 
@@ -204,7 +221,9 @@ def jobs_to_csv(jobs: list[JobListing]) -> str:
         "Work Mode",
         "Employment Type",
         "Match Score",
-        "Match Reason",
+        "Strengths",
+        "Gaps",
+        "Recommendation",
         "Application Link",
         "Source",
     ])
@@ -217,7 +236,9 @@ def jobs_to_csv(jobs: list[JobListing]) -> str:
             job.work_mode or "",
             job.employment_type or "",
             job.match_score if job.match_score is not None else "",
-            job.match_reason or "",
+            " ; ".join(job.match_strengths or []),
+            " ; ".join(job.match_gaps or []),
+            job.match_recommendation or "",
             job.application_url or build_fallback_job_link(job),
             job.source_platform or "",
         ])
@@ -383,8 +404,19 @@ if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True
                             if badge_str:
                                 st.write(f"**Upplägg:** {badge_str}")
 
-                            st.info(f"**💡 AI-Motivering:** {job.match_reason}")
-                            st.markdown(f"[{link_label}]({link})")
+                            if job.match_strengths:
+                                st.write("**✅ Styrkor:**")
+                                for item in job.match_strengths:
+                                    st.write(f"- {item}")
 
+                            if job.match_gaps:
+                                st.write("**⚠️ Saknas / Svagheter:**")
+                                for item in job.match_gaps:
+                                    st.write(f"- {item}")
+
+                            if job.match_recommendation:
+                                st.info(f"**💡 Rekommendation:** {job.match_recommendation}")
+
+                            st.markdown(f"[{link_label}]({link})")
             except Exception as e:
                 st.error(f"Ett fel uppstod: {e}")
