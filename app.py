@@ -368,6 +368,33 @@ def save_application_pack(job: JobListing, pack: ApplicationPack) -> None:
             saved_job.cv_tailoring_tips = pack.cv_tailoring_tips
             break
 
+def build_application_pack_text(job: JobListing) -> str:
+    parts = [
+        f"Titel: {job.title}",
+        f"Företag: {job.company}",
+        f"Plats: {job.location}",
+        f"Status: {job.status}",
+        "",
+    ]
+
+    if job.short_motivation:
+        parts.append("KORT MOTIVATION")
+        parts.append(job.short_motivation)
+        parts.append("")
+
+    if job.cover_letter:
+        parts.append("PERSONLIGT BREV")
+        parts.append(job.cover_letter)
+        parts.append("")
+
+    if job.cv_tailoring_tips:
+        parts.append("CV-ANPASSNING")
+        for tip in job.cv_tailoring_tips:
+            parts.append(f"- {tip}")
+        parts.append("")
+
+    return "\n".join(parts).strip()
+
 async def run_search_workflow(query: str, location: str, skills: str, min_score: int):
     q_enc = urllib.parse.quote(query)
     l_enc = urllib.parse.quote(location)
@@ -669,9 +696,17 @@ if st.session_state.saved_jobs:
             if job.match_recommendation:
                 st.info(f"**💡 Rekommendation:** {job.match_recommendation}")
 
+            if job.short_motivation or job.cover_letter:
+                st.caption("Markera och kopiera texten direkt härifrån.")
+
             if job.short_motivation:
                 st.write("**📝 Kort motivation:**")
-                st.write(job.short_motivation)
+                st.text_area(
+                    "Kort motivation",
+                    value=job.short_motivation,
+                    height=100,
+                    key=f"motivation_{get_job_key(job)}"
+                )
 
             if job.cover_letter:
                 st.write("**📄 Personligt brev:**")
@@ -686,6 +721,19 @@ if st.session_state.saved_jobs:
                 st.write("**🎯 CV-anpassning:**")
                 for tip in job.cv_tailoring_tips:
                     st.write(f"- {tip}")
+
+            if job.short_motivation or job.cover_letter or job.cv_tailoring_tips:
+                pack_text = build_application_pack_text(job)
+                safe_company = (job.company or "company").replace(" ", "_")
+                safe_title = (job.title or "job").replace(" ", "_")
+
+                st.download_button(
+                    label="📄 Ladda ner ansökningspaket (.txt)",
+                    data=pack_text,
+                    file_name=f"application_pack_{safe_company}_{safe_title}.txt",
+                    mime="text/plain",
+                    key=f"download_pack_{get_job_key(job)}"
+                )
 
             st.markdown(f"[{link_label}]({link})")
 else:
