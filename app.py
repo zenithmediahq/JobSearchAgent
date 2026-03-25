@@ -40,6 +40,9 @@ class JobListing(BaseModel):
     match_gaps: list[str] | None = None
     match_recommendation: str | None = None
     status: str = "Ej ansökt"
+    short_motivation: str | None = None
+    cover_letter: str | None = None
+    cv_tailoring_tips: list[str] | None = None
 
 
 class JobListings(BaseModel):
@@ -57,6 +60,11 @@ class ScoredJob(BaseModel):
 
 class ScoringResult(BaseModel):
     scored_jobs: list[ScoredJob]
+
+class ApplicationPack(BaseModel):
+    short_motivation: str
+    cover_letter: str
+    cv_tailoring_tips: list[str]
 
 
 # -------------------------
@@ -99,6 +107,9 @@ if "last_location" not in st.session_state:
 
 if "last_min_score" not in st.session_state:
     st.session_state.last_min_score = 0
+
+if "cv_text" not in st.session_state:
+    st.session_state.cv_text = ""
 
 # -------------------------
 # AI och Sök-funktioner
@@ -227,6 +238,47 @@ async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobLis
 
     return jobs
 
+async def generate_application_pack(job: JobListing, cv_text: str) -> ApplicationPack | None:
+    client = get_ai_client()
+
+    try:
+        response = await client.beta.chat.completions.parse(
+            model=AI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Du hjälper kandidaten att skriva ett ansökningspaket på svenska. "
+                        "Du får kandidatens riktiga CV och en jobbannons. "
+                        "Du får aldrig hitta på erfarenhet, utbildning, certifikat eller ansvar som inte finns i CV:t. "
+                        "Skriv tydligt, konkret och professionellt. Undvik överdrivet språk.\n\n"
+                        "Returnera:\n"
+                        "- short_motivation: 2 till 4 meningar, kort och användbar för ansökningsformulär\n"
+                        "- cover_letter: ett kort personligt brev på svenska\n"
+                        "- cv_tailoring_tips: 3 till 6 konkreta tips om vad kandidaten bör lyfta fram eller justera i sitt CV för detta jobb"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Kandidatens CV:\n{cv_text}\n\n"
+                        f"Jobb:\n"
+                        f"Titel: {job.title}\n"
+                        f"Företag: {job.company}\n"
+                        f"Plats: {job.location}\n"
+                        f"Arbetsform: {job.work_mode}\n"
+                        f"Anställningstyp: {job.employment_type}\n"
+                        f"Beskrivning:\n{job.description[:4000]}"
+                    ),
+                },
+            ],
+            response_format=ApplicationPack,
+        )
+        return response.choices[0].message.parsed
+    except Exception as e:
+        logger.error(f"Application pack fel: {e}")
+        return None
+
 
 def build_fallback_job_link(job: JobListing) -> str:
     company = urllib.parse.quote(job.company or "")
@@ -304,6 +356,16 @@ def update_job_status(job: JobListing, new_status: str) -> None:
     for saved_job in st.session_state.saved_jobs:
         if get_job_key(saved_job) == job_key:
             saved_job.status = new_status
+            break
+
+def save_application_pack(job: JobListing, pack: ApplicationPack) -> None:
+    job_key = get_job_key(job)
+
+    for saved_job in st.session_state.saved_jobs:
+        if get_job_key(saved_job) == job_key:
+            saved_job.short_motivation = pack.short_motivation
+            saved_job.cover_letter = pack.cover_letter
+            saved_job.cv_tailoring_tips = pack.cv_tailoring_tips
             break
 
 async def run_search_workflow(query: str, location: str, skills: str, min_score: int):
@@ -430,6 +492,7 @@ if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True
                 st.session_state.last_query = query
                 st.session_state.last_location = location
                 st.session_state.last_min_score = min_score
+                st.session_state.cv_text = final_cv_text
 
             except Exception as e:
                 st.error(f"Ett fel uppstod: {e}")
@@ -572,6 +635,18 @@ if st.session_state.saved_jobs:
                 st.rerun()
 
             if st.button(
+                f"✍️ Generera ansökningspaket: {job.title} @ {job.company}",
+                key=f"pack_{get_job_key(job)}"
+            ):
+                with st.spinner("Genererar ansökningspaket..."):
+                    pack = asyncio.run(generate_application_pack(job, st.session_state.cv_text))
+                    if pack:
+                        save_application_pack(job, pack)
+                        st.rerun()
+                    else:
+                        st.error("Kunde inte generera ansökningspaket.")
+
+            if st.button(
                 f"🗑️ Ta bort: {job.title} @ {job.company}",
                 key=f"remove_{get_job_key(job)}"
             ):
@@ -593,6 +668,24 @@ if st.session_state.saved_jobs:
 
             if job.match_recommendation:
                 st.info(f"**💡 Rekommendation:** {job.match_recommendation}")
+
+            if job.short_motivation:
+                st.write("**📝 Kort motivation:**")
+                st.write(job.short_motivation)
+
+            if job.cover_letter:
+                st.write("**📄 Personligt brev:**")
+                st.text_area(
+                    "Personligt brev",
+                    value=job.cover_letter,
+                    height=220,
+                    key=f"cover_letter_{get_job_key(job)}"
+                )
+
+            if job.cv_tailoring_tips:
+                st.write("**🎯 CV-anpassning:**")
+                for tip in job.cv_tailoring_tips:
+                    st.write(f"- {tip}")
 
             st.markdown(f"[{link_label}]({link})")
 else:
