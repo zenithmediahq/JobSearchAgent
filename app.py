@@ -111,6 +111,9 @@ if "last_min_score" not in st.session_state:
 if "cv_text" not in st.session_state:
     st.session_state.cv_text = ""
 
+if "search_diagnostics" not in st.session_state:
+    st.session_state.search_diagnostics = {}
+
 # -------------------------
 # AI och Sök-funktioner
 # -------------------------
@@ -419,31 +422,62 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
     ]
 
     async def process_source(source):
+        diagnostics = {
+            "platform": source["platform"],
+            "fetched": False,
+            "jobs_extracted": 0,
+        }
+
         md = await fetch_webpage(source["url"])
+        if md.strip():
+            diagnostics["fetched"] = True
+
         extracted = await extract_jobs_with_ai(md, source["url"])
+        diagnostics["jobs_extracted"] = len(extracted)
+
         for job in extracted:
             job.source_platform = source["platform"]
-        return extracted
+
+        return extracted, diagnostics
 
     results = await asyncio.gather(*(process_source(s) for s in sources))
+
+    diagnostics_by_source = []
+    all_jobs_raw = []
+
+    for extracted_jobs, source_diag in results:
+        diagnostics_by_source.append(source_diag)
+        all_jobs_raw.extend(extracted_jobs)
+
+    before_dedup = len(all_jobs_raw)
 
     # Dubblettfilter
     all_jobs = []
     seen_jobs = set()
 
-    for job_list in results:
-        for job in job_list:
-            title_key = (job.title or "").lower().strip()
-            company_key = (job.company or "").lower().strip()
-            key = f"{title_key}|{company_key}"
+    for job in all_jobs_raw:
+        title_key = (job.title or "").lower().strip()
+        company_key = (job.company or "").lower().strip()
+        key = f"{title_key}|{company_key}"
 
-            if key not in seen_jobs:
-                seen_jobs.add(key)
-                all_jobs.append(job)
+        if key not in seen_jobs:
+            seen_jobs.add(key)
+            all_jobs.append(job)
+
+    after_dedup = len(all_jobs)
 
     # Poängsätt mot CV
     scored_jobs = await score_jobs_with_ai(all_jobs, skills)
-    return [job for job in scored_jobs if (job.match_score or 0) >= min_score]
+    filtered_jobs = [job for job in scored_jobs if (job.match_score or 0) >= min_score]
+
+    diagnostics = {
+        "sources": diagnostics_by_source,
+        "before_dedup": before_dedup,
+        "after_dedup": after_dedup,
+        "after_score_filter": len(filtered_jobs),
+    }
+
+    return filtered_jobs, diagnostics
 
 
 # -------------------------
@@ -494,7 +528,7 @@ if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True
     else:
         with st.spinner("🤖 Agenten söker av nätet och läser annonser... (Tar ca 30-60 sek)"):
             try:
-                all_found_jobs = asyncio.run(
+                all_found_jobs, diagnostics = asyncio.run(
                     run_search_workflow(query, location, final_cv_text, min_score)
                 )
 
@@ -520,6 +554,7 @@ if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True
                 st.session_state.last_location = location
                 st.session_state.last_min_score = min_score
                 st.session_state.cv_text = final_cv_text
+                st.session_state.search_diagnostics = diagnostics
 
             except Exception as e:
                 st.error(f"Ett fel uppstod: {e}")
@@ -530,6 +565,19 @@ if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True
 st.subheader("📋 Resultat")
 if st.session_state.search_ran:
     saved_results = st.session_state.search_results
+    diagnostics = st.session_state.search_diagnostics
+
+    with st.expander("🔎 Sökdiagnostik"):
+        for source in diagnostics.get("sources", []):
+            status = "hämtad" if source.get("fetched") else "fetch misslyckades / tomt svar"
+            st.write(
+                f"**{source['platform']}** — {status}, extraherade jobb: {source['jobs_extracted']}"
+            )
+
+        st.write(f"**Före dubblettfilter:** {diagnostics.get('before_dedup', 0)}")
+        st.write(f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")
+        st.write(f"**Efter AI-scorefilter:** {diagnostics.get('after_score_filter', 0)}")
+        st.write(f"**Efter valda UI-filter:** {len(saved_results)}")
 
     if not saved_results:
         st.info(
@@ -609,7 +657,7 @@ if st.session_state.search_ran:
                     st.info(f"**💡 Rekommendation:** {job.match_recommendation}")
 
                 st.markdown(f"[{link_label}]({link})")
-
+                
 # --- SPARADE JOBB ---
 
 if st.session_state.saved_jobs:
