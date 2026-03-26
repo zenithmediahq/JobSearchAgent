@@ -5,10 +5,11 @@ import httpx
 import urllib.parse
 
 from utils.export import build_fallback_job_link, jobs_to_csv, build_application_pack_text
-from models import JobListing, JobListings, ApplicationPack
+from models import JobListing, JobListings
 from services.ai_client import get_api_key, get_ai_client
 from services.cv_parser import extract_text_from_upload
 from services.job_scoring import score_jobs_with_ai
+from services.application_pack import generate_application_pack
 from utils.job_state import (
     get_job_key,
     is_job_saved,
@@ -111,48 +112,6 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
     except Exception as e:
         logger.error(f"AI Extraktionsfel: {e}")
         return []
-
-async def generate_application_pack(job: JobListing, cv_text: str) -> ApplicationPack | None:
-    client = get_ai_client()
-
-    try:
-        response = await client.beta.chat.completions.parse(
-            model=AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Du hjälper kandidaten att skriva ett ansökningspaket på svenska. "
-                        "Du får kandidatens riktiga CV och en jobbannons. "
-                        "Du får aldrig hitta på erfarenhet, utbildning, certifikat eller ansvar som inte finns i CV:t. "
-                        "Skriv tydligt, konkret och professionellt. Undvik överdrivet språk.\n\n"
-                        "Returnera:\n"
-                        "- short_motivation: 2 till 4 meningar, kort och användbar för ansökningsformulär\n"
-                        "- cover_letter: ett kort personligt brev på svenska\n"
-                        "- cv_tailoring_tips: 3 till 6 konkreta tips om vad kandidaten bör lyfta fram eller justera i sitt CV för detta jobb"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Kandidatens CV:\n{cv_text}\n\n"
-                        f"Jobb:\n"
-                        f"Titel: {job.title}\n"
-                        f"Företag: {job.company}\n"
-                        f"Plats: {job.location}\n"
-                        f"Arbetsform: {job.work_mode}\n"
-                        f"Anställningstyp: {job.employment_type}\n"
-                        f"Beskrivning:\n{job.description[:4000]}"
-                    ),
-                },
-            ],
-            response_format=ApplicationPack,
-        )
-        return response.choices[0].message.parsed
-    except Exception as e:
-        logger.error(f"Application pack fel: {e}")
-        return None
-
 
 
 async def run_search_workflow(query: str, location: str, skills: str, min_score: int):
