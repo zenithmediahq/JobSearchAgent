@@ -1,4 +1,3 @@
-
 import logging
 
 from models import JobListing, ApplicationPack
