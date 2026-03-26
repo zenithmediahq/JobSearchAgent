@@ -6,9 +6,7 @@ import urllib.parse
 import httpx
 from models import JobListing, JobListings, ScoredJob, ScoringResult, ApplicationPack
 from openai import AsyncOpenAI
-from io import BytesIO, StringIO
-import fitz  # pymupdf
-from docx import Document  # python-docx
+from services.cv_parser import extract_text_from_upload
 
 # -------------------------
 # Inställningar
@@ -22,25 +20,6 @@ LINKUP_API_URL = "https://api.linkup.so/v1/fetch"
 AI_MODEL = "gemini-2.5-flash"
 MAX_CONTENT_CHARS = 50000
 
-
-# -------------------------
-# Hjälpfunktion för att läsa CV-filer
-# -------------------------
-
-def extract_text_from_upload(uploaded_file) -> str:
-    """Extraherar text från PDF, DOCX eller TXT-filer."""
-    file_bytes = uploaded_file.read()
-    filename = uploaded_file.name.lower()
-
-    if filename.endswith(".pdf"):
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-        return "\n".join(page.get_text() for page in doc).strip()
-
-    if filename.endswith(".docx"):
-        doc = Document(BytesIO(file_bytes))
-        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-
-    return file_bytes.decode("utf-8", errors="replace")
 
 # -------------------------
 # SESSION STATE
