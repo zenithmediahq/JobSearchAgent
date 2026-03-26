@@ -4,7 +4,7 @@ import logging
 import csv
 import urllib.parse
 import httpx
-from pydantic import BaseModel
+from models import JobListing, JobListings, ScoredJob, ScoringResult, ApplicationPack
 from openai import AsyncOpenAI
 from io import BytesIO, StringIO
 import fitz  # pymupdf
@@ -21,50 +21,6 @@ logger = logging.getLogger(__name__)
 LINKUP_API_URL = "https://api.linkup.so/v1/fetch"
 AI_MODEL = "gemini-2.5-flash"
 MAX_CONTENT_CHARS = 50000
-
-# -------------------------
-# Datamodeller
-# -------------------------
-
-class JobListing(BaseModel):
-    title: str
-    company: str
-    location: str
-    description: str
-    work_mode: str | None = None
-    employment_type: str | None = None
-    application_url: str | None = None
-    source_platform: str | None = None
-    match_score: int | None = None
-    match_strengths: list[str] | None = None
-    match_gaps: list[str] | None = None
-    match_recommendation: str | None = None
-    status: str = "Ej ansökt"
-    short_motivation: str | None = None
-    cover_letter: str | None = None
-    cv_tailoring_tips: list[str] | None = None
-
-
-class JobListings(BaseModel):
-    jobs: list[JobListing]
-    total_count: int
-
-
-class ScoredJob(BaseModel):
-    index: int
-    score: int
-    strengths: list[str]
-    gaps: list[str]
-    recommendation: str
-
-
-class ScoringResult(BaseModel):
-    scored_jobs: list[ScoredJob]
-
-class ApplicationPack(BaseModel):
-    short_motivation: str
-    cover_letter: str
-    cv_tailoring_tips: list[str]
 
 
 # -------------------------
