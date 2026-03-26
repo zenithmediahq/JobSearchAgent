@@ -1,7 +1,5 @@
 import asyncio
 import logging
-import csv
-import urllib.parse
 import httpx
 from models import JobListing, JobListings, ScoredJob, ScoringResult, ApplicationPack
 from services.ai_client import get_api_key, get_ai_client
