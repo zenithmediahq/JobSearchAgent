@@ -1,11 +1,10 @@
-import streamlit as st
 import asyncio
 import logging
 import csv
 import urllib.parse
 import httpx
 from models import JobListing, JobListings, ScoredJob, ScoringResult, ApplicationPack
-from openai import AsyncOpenAI
+from services.ai_client import get_api_key, get_ai_client
 from services.cv_parser import extract_text_from_upload
 
 # -------------------------
@@ -52,21 +51,6 @@ if "search_diagnostics" not in st.session_state:
 # -------------------------
 # AI och Sök-funktioner
 # -------------------------
-
-def get_api_key(secret_name: str) -> str:
-    try:
-        return st.secrets[secret_name]
-    except Exception:
-        st.error(f"Saknar API-nyckel: {secret_name}")
-        st.stop()
-
-
-def get_ai_client() -> AsyncOpenAI:
-    return AsyncOpenAI(
-        api_key=get_api_key("GEMINI_API_KEY"),
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-    )
-
 
 async def fetch_webpage(url: str) -> str:
     headers = {
