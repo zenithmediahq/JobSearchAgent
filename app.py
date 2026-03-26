@@ -1,6 +1,9 @@
+import streamlit as st
 import asyncio
 import logging
 import httpx
+import urllib.parse
+
 from utils.export import build_fallback_job_link, jobs_to_csv, build_application_pack_text
 from models import JobListing, JobListings, ScoredJob, ScoringResult, ApplicationPack
 from services.ai_client import get_api_key, get_ai_client
@@ -13,7 +16,6 @@ from utils.job_state import (
     update_job_status,
     save_application_pack,
 )
-
 # -------------------------
 # Inställningar
 # -------------------------
