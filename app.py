@@ -24,10 +24,6 @@ st.set_page_config(page_title="AI Jobb-Agent", page_icon="💼", layout="wide")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-LINKUP_API_URL = "https://api.linkup.so/v1/fetch"
-AI_MODEL = "gemini-2.5-flash"
-MAX_CONTENT_CHARS = 50000
-
 
 # -------------------------
 # SESSION STATE
