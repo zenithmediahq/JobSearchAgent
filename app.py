@@ -58,69 +58,6 @@ if "search_diagnostics" not in st.session_state:
     st.session_state.search_diagnostics = {}
 
 # -------------------------
-# AI och Sök-funktioner
-# -------------------------
-
-    async def process_source(source):
-        diagnostics = {
-            "platform": source["platform"],
-            "fetched": False,
-            "jobs_extracted": 0,
-        }
-
-        md = await fetch_webpage(source["url"])
-        if md.strip():
-            diagnostics["fetched"] = True
-
-        extracted = await extract_jobs_with_ai(md, source["url"])
-        diagnostics["jobs_extracted"] = len(extracted)
-
-        for job in extracted:
-            job.source_platform = source["platform"]
-
-        return extracted, diagnostics
-
-    results = await asyncio.gather(*(process_source(s) for s in sources))
-
-    diagnostics_by_source = []
-    all_jobs_raw = []
-
-    for extracted_jobs, source_diag in results:
-        diagnostics_by_source.append(source_diag)
-        all_jobs_raw.extend(extracted_jobs)
-
-    before_dedup = len(all_jobs_raw)
-
-    # Dubblettfilter
-    all_jobs = []
-    seen_jobs = set()
-
-    for job in all_jobs_raw:
-        title_key = (job.title or "").lower().strip()
-        company_key = (job.company or "").lower().strip()
-        key = f"{title_key}|{company_key}"
-
-        if key not in seen_jobs:
-            seen_jobs.add(key)
-            all_jobs.append(job)
-
-    after_dedup = len(all_jobs)
-
-    # Poängsätt mot CV
-    scored_jobs = await score_jobs_with_ai(all_jobs, skills)
-    filtered_jobs = [job for job in scored_jobs if (job.match_score or 0) >= min_score]
-
-    diagnostics = {
-        "sources": diagnostics_by_source,
-        "before_dedup": before_dedup,
-        "after_dedup": after_dedup,
-        "after_score_filter": len(filtered_jobs),
-    }
-
-    return filtered_jobs, diagnostics
-
-
-# -------------------------
 # WEBBGRÄNSSNITT (UI)
 # -------------------------
 
