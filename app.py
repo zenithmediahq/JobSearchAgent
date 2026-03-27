@@ -1,15 +1,12 @@
 import streamlit as st
 import asyncio
 import logging
-import httpx
-import urllib.parse
 
 from utils.export import build_fallback_job_link, jobs_to_csv, build_application_pack_text
-from models import JobListing, JobListings
-from services.ai_client import get_api_key, get_ai_client
+from models import JobListing
 from services.cv_parser import extract_text_from_upload
-from services.job_scoring import score_jobs_with_ai
 from services.application_pack import generate_application_pack
+from services.job_fetcher import run_search_workflow
 from utils.job_state import (
     get_job_key,
     is_job_saved,
@@ -18,6 +15,7 @@ from utils.job_state import (
     update_job_status,
     save_application_pack,
 )
+
 # -------------------------
 # Inställningar
 # -------------------------
@@ -62,80 +60,6 @@ if "search_diagnostics" not in st.session_state:
 # -------------------------
 # AI och Sök-funktioner
 # -------------------------
-
-async def fetch_webpage(url: str) -> str:
-    headers = {
-        "Authorization": f"Bearer {get_api_key('LINKUP_API_KEY')}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "url": url,
-        "includeRawHtml": False,
-        "renderJs": True,
-        "extractImages": False,
-    }
-
-    async with httpx.AsyncClient(timeout=120) as client:
-        try:
-            response = await client.post(LINKUP_API_URL, headers=headers, json=payload)
-            response.raise_for_status()
-            return response.json().get("markdown", "")
-        except Exception as e:
-            logger.warning(f"Kunde inte läsa {url}: {e}")
-            return ""
-
-
-async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
-    if not markdown:
-        return []
-
-    markdown = markdown[:MAX_CONTENT_CHARS]
-    client = get_ai_client()
-
-    try:
-        response = await client.beta.chat.completions.parse(
-            model=AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Extrahera alla jobbannonser. Identifiera titel, företag, plats, länk, "
-                        "arbetsform (distans/hybrid/på plats), anställningstyp (heltid/deltid) "
-                        "och beskrivning."
-                    ),
-                },
-                {"role": "user", "content": f"URL: {url}\n\nInnehåll:\n{markdown}"},
-            ],
-            response_format=JobListings,
-        )
-        return response.choices[0].message.parsed.jobs
-    except Exception as e:
-        logger.error(f"AI Extraktionsfel: {e}")
-        return []
-
-
-async def run_search_workflow(query: str, location: str, skills: str, min_score: int):
-    q_enc = urllib.parse.quote(query)
-    l_enc = urllib.parse.quote(location)
-
-    sources = [
-        {
-            "url": f"https://arbetsformedlingen.se/platsbanken/annonser?q={q_enc}%20{l_enc}",
-            "platform": "Platsbanken",
-        },
-        {
-            "url": f"https://se.indeed.com/jobs?q={q_enc}&l={l_enc}",
-            "platform": "Indeed",
-        },
-        {
-            "url": f"https://www.linkedin.com/jobs/search?keywords={q_enc}&location={l_enc}",
-            "platform": "LinkedIn",
-        },
-        {
-            "url": f"https://jobbsafari.se/jobb?q={q_enc}&l={l_enc}",
-            "platform": "JobbSafari",
-        },
-    ]
 
     async def process_source(source):
         diagnostics = {
