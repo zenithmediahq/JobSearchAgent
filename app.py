@@ -1,6 +1,6 @@
-import streamlit as st
 import asyncio
 import logging
+import streamlit as st
 
 from utils.export import build_fallback_job_link, jobs_to_csv, build_application_pack_text
 from models import JobListing
@@ -24,102 +24,308 @@ st.set_page_config(page_title="AI Jobb-Agent", page_icon="💼", layout="wide")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 # -------------------------
 # SESSION STATE
 # -------------------------
 
-if "search_results" not in st.session_state:
-    st.session_state.search_results = []
+DEFAULT_SESSION_VALUES = {
+    "search_results": [],
+    "saved_jobs": [],
+    "search_ran": False,
+    "last_query": "",
+    "last_location": "",
+    "last_min_score": 0,
+    "cv_text": "",
+    "search_diagnostics": {},
+}
 
-if "saved_jobs" not in st.session_state:
-    st.session_state.saved_jobs = []
+for key, value in DEFAULT_SESSION_VALUES.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
-if "search_ran" not in st.session_state:
-    st.session_state.search_ran = False
-
-if "last_query" not in st.session_state:
-    st.session_state.last_query = ""
-
-if "last_location" not in st.session_state:
-    st.session_state.last_location = ""
-
-if "last_min_score" not in st.session_state:
-    st.session_state.last_min_score = 0
-
-if "cv_text" not in st.session_state:
-    st.session_state.cv_text = ""
-
-if "search_diagnostics" not in st.session_state:
-    st.session_state.search_diagnostics = {}
 
 # -------------------------
-# WEBBGRÄNSSNITT (UI)
+# Hjälpfunktioner
 # -------------------------
 
-st.title("💼 Din Personliga AI-Rekryterare")
-st.markdown(
-    "Ladda upp ditt CV och fyll i vad du letar efter. AI:n skannar marknaden, "
-    "filtrerar bort bruset och presenterar endast jobben som passar dig."
-)
+def get_score_emoji(score: int) -> str:
+    if score >= 80:
+        return "🟢"
+    if score >= 60:
+        return "🟡"
+    return "🔴"
 
-# --- SIDOPANEL: INSTÄLLNINGAR & FILTER ---
+
+def get_job_link(job: JobListing) -> tuple[str, str]:
+    link = job.application_url
+    if not link or str(link).lower() == "none":
+        return build_fallback_job_link(job), "🔍 Sök upp annonsen"
+    return link, "🔗 Gå till ansökan"
+
+
+def build_badges(job: JobListing) -> list[str]:
+    badges = []
+    if job.work_mode and str(job.work_mode).lower() != "none":
+        badges.append(f"🏠 {job.work_mode}")
+    if job.employment_type and str(job.employment_type).lower() != "none":
+        badges.append(f"⏱️ {job.employment_type}")
+    if job.source_platform and str(job.source_platform).lower() != "none":
+        badges.append(f"🌐 {job.source_platform}")
+    return badges
+
+
+def render_job_meta(job: JobListing):
+    score = job.match_score or 0
+    badges = build_badges(job)
+
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.write(f"**📍 Plats:** {job.location or 'Ej angivet'}")
+    with col2:
+        st.write(f"**🎯 Matchning:** {score}%")
+
+    if badges:
+        st.caption(" • ".join(badges))
+
+
+def render_match_analysis(job: JobListing):
+    if job.match_strengths:
+        st.write("**Styrkor**")
+        for item in job.match_strengths:
+            st.write(f"- {item}")
+
+    if job.match_gaps:
+        st.write("**Saknas / svagheter**")
+        for item in job.match_gaps:
+            st.write(f"- {item}")
+
+    if job.match_recommendation:
+        st.info(job.match_recommendation)
+
+
+def apply_ui_filters(jobs: list[JobListing], filter_remote: bool, filter_fulltime: bool) -> list[JobListing]:
+    filtered_jobs = []
+
+    for job in jobs:
+        if filter_remote:
+            wm = str(job.work_mode or "").lower()
+            if "distans" not in wm and "hybrid" not in wm and "remote" not in wm:
+                continue
+
+        if filter_fulltime:
+            et = str(job.employment_type or "").lower()
+            if "heltid" not in et and "full-time" not in et and "full time" not in et:
+                continue
+
+        filtered_jobs.append(job)
+
+    return filtered_jobs
+
+
+def render_search_diagnostics(diagnostics: dict, visible_results_count: int):
+    with st.expander("Visa sökdiagnostik"):
+        for source in diagnostics.get("sources", []):
+            status = "hämtad" if source.get("fetched") else "misslyckades / tomt svar"
+            st.write(
+                f"**{source['platform']}** — {status}, extraherade jobb: {source['jobs_extracted']}"
+            )
+
+        st.write(f"**Före dubblettfilter:** {diagnostics.get('before_dedup', 0)}")
+        st.write(f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")
+        st.write(f"**Efter AI-scorefilter:** {diagnostics.get('after_score_filter', 0)}")
+        st.write(f"**Efter valda UI-filter:** {visible_results_count}")
+
+
+def render_search_result_card(job: JobListing):
+    score = job.match_score or 0
+    score_emoji = get_score_emoji(score)
+    link, link_label = get_job_link(job)
+    job_key = get_job_key(job)
+
+    title = job.title or "Okänd titel"
+    company = job.company or "Okänt företag"
+
+    with st.container(border=True):
+        st.markdown(f"### {score_emoji} {title}")
+        st.write(f"**{company}**")
+
+        render_job_meta(job)
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            if is_job_saved(job):
+                st.success("Sparat")
+                if st.button("Ta bort från sparade", key=f"unsave_{job_key}", use_container_width=True):
+                    remove_job(job)
+                    st.rerun()
+            else:
+                if st.button("Spara jobb", key=f"save_{job_key}", use_container_width=True):
+                    save_job(job)
+                    st.rerun()
+
+        with col2:
+            st.link_button(link_label, link, use_container_width=True)
+
+        with st.expander("Visa matchningsanalys"):
+            render_match_analysis(job)
+
+
+def render_saved_job_card(job: JobListing):
+    score = job.match_score or 0
+    score_emoji = get_score_emoji(score)
+    link, link_label = get_job_link(job)
+    job_key = get_job_key(job)
+
+    title = job.title or "Okänd titel"
+    company = job.company or "Okänt företag"
+
+    with st.container(border=True):
+        st.markdown(f"### {score_emoji} {title}")
+        st.write(f"**{company}**")
+
+        render_job_meta(job)
+
+        status_options = ["Ej ansökt", "Ansökt", "Intervju", "Avslag"]
+        current_status = job.status if job.status in status_options else "Ej ansökt"
+
+        new_status = st.selectbox(
+            "Status",
+            status_options,
+            index=status_options.index(current_status),
+            key=f"status_{job_key}",
+        )
+
+        if new_status != current_status:
+            update_job_status(job, new_status)
+            st.rerun()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("Generera ansökningspaket", key=f"pack_{job_key}", use_container_width=True):
+                with st.spinner("Genererar ansökningspaket..."):
+                    pack = asyncio.run(generate_application_pack(job, st.session_state.cv_text))
+                    if pack:
+                        save_application_pack(job, pack)
+                        st.rerun()
+                    else:
+                        st.error("Kunde inte generera ansökningspaket.")
+
+        with col2:
+            if st.button("Ta bort", key=f"remove_{job_key}", use_container_width=True):
+                remove_job(job)
+                st.rerun()
+
+        st.link_button(link_label, link, use_container_width=True)
+
+        with st.expander("Visa detaljer"):
+            render_match_analysis(job)
+
+            if job.short_motivation or job.cover_letter:
+                st.caption("Markera och kopiera texten direkt härifrån.")
+
+            if job.short_motivation:
+                st.write("**Kort motivation**")
+                st.text_area(
+                    "Kort motivation",
+                    value=job.short_motivation,
+                    height=100,
+                    key=f"motivation_{job_key}",
+                    label_visibility="collapsed",
+                )
+
+            if job.cover_letter:
+                st.write("**Personligt brev**")
+                st.text_area(
+                    "Personligt brev",
+                    value=job.cover_letter,
+                    height=220,
+                    key=f"cover_letter_{job_key}",
+                    label_visibility="collapsed",
+                )
+
+            if job.cv_tailoring_tips:
+                st.write("**CV-anpassning**")
+                for tip in job.cv_tailoring_tips:
+                    st.write(f"- {tip}")
+
+            if job.short_motivation or job.cover_letter or job.cv_tailoring_tips:
+                pack_text = build_application_pack_text(job)
+                safe_company = (job.company or "company").replace(" ", "_")
+                safe_title = (job.title or "job").replace(" ", "_")
+
+                st.download_button(
+                    label="Ladda ner ansökningspaket (.txt)",
+                    data=pack_text,
+                    file_name=f"application_pack_{safe_company}_{safe_title}.txt",
+                    mime="text/plain",
+                    key=f"download_pack_{job_key}",
+                    use_container_width=True,
+                )
+
+
+# -------------------------
+# UI
+# -------------------------
+
+st.title("💼 AI Job Search Agent")
+st.caption("Ladda upp ditt CV, sök jobb och spara de roller som passar bäst.")
 
 with st.sidebar:
-    st.header("🔍 Sökinställningar")
-    query = st.text_input("Jobbtitel / Sökord", value="IT support")
+    st.header("Sökning")
+    query = st.text_input("Jobbtitel eller sökord", value="IT support")
     location = st.text_input("Plats", value="Skåne")
-    min_score = st.slider("Lägsta AI-matchning (%)", 0, 100, 40, 5)
+    min_score = st.slider("Minsta matchning (%)", 0, 100, 40, 5)
 
     st.markdown("---")
-    st.header("⚙️ Smarta Filter")
-    filter_remote = st.checkbox("🏠 Visa endast Distans/Hybrid")
-    filter_fulltime = st.checkbox("⏱️ Visa endast Heltid")
+    st.header("Filter")
+    filter_remote = st.checkbox("Endast distans / hybrid")
+    filter_fulltime = st.checkbox("Endast heltid")
 
-# --- HUVUDYTA: LADD UPP CV ---
+st.subheader("Din profil")
 
-st.subheader("📄 Ladda upp din profil")
 uploaded_file = st.file_uploader(
-    "Dra och släpp ditt CV här (PDF, DOCX eller TXT)",
+    "Ladda upp CV (PDF, DOCX eller TXT)",
     type=["pdf", "docx", "txt"],
 )
-cv_text_input = st.text_area("...eller klistra in din text manuellt:", height=100)
 
-# Bestäm vilken text vi använder
+cv_text_input = st.text_area(
+    "Eller klistra in CV-text manuellt",
+    height=140,
+    placeholder="Klistra in din CV-text här...",
+)
+
 final_cv_text = ""
 if uploaded_file is not None:
     final_cv_text = extract_text_from_upload(uploaded_file)
-    st.success(f"✅ Filen '{uploaded_file.name}' inläst och redo!")
+    st.success(f"Filen '{uploaded_file.name}' är inläst.")
 elif cv_text_input.strip():
     final_cv_text = cv_text_input.strip()
 
-# --- SÖKKNAPP ---
+search_col1, search_col2 = st.columns([2, 1])
 
-if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True):
+with search_col1:
+    start_search = st.button("Starta AI-sökning", type="primary", use_container_width=True)
+
+with search_col2:
+    st.metric("Min score", f"{min_score}%")
+
+if start_search:
     if not final_cv_text.strip():
-        st.warning("⚠️ Du måste antingen ladda upp ditt CV eller klistra in texten först!")
+        st.warning("Du behöver ladda upp ett CV eller klistra in CV-text först.")
     else:
-        with st.spinner("🤖 Agenten söker av nätet och läser annonser... (Tar ca 30-60 sek)"):
+        with st.spinner("Söker källor, läser annonser och poängsätter matchning..."):
             try:
                 all_found_jobs, diagnostics = asyncio.run(
                     run_search_workflow(query, location, final_cv_text, min_score)
                 )
 
-                # --- APPLICERA EXTRA FILTER (Distans & Heltid) ---
-                
-                filtered_jobs = []
-                for job in all_found_jobs:
-                    if filter_remote:
-                        wm = str(job.work_mode or "").lower()
-                        if "distans" not in wm and "hybrid" not in wm and "remote" not in wm:
-                            continue
-
-                    if filter_fulltime:
-                        et = str(job.employment_type or "").lower()
-                        if "heltid" not in et and "full-time" not in et and "full time" not in et:
-                            continue
-
-                    filtered_jobs.append(job)
+                filtered_jobs = apply_ui_filters(
+                    all_found_jobs,
+                    filter_remote=filter_remote,
+                    filter_fulltime=filter_fulltime,
+                )
 
                 st.session_state.search_results = filtered_jobs
                 st.session_state.search_ran = True
@@ -132,113 +338,52 @@ if st.button("🚀 Starta AI-sökning", type="primary", use_container_width=True
             except Exception as e:
                 st.error(f"Ett fel uppstod: {e}")
 
+st.subheader("Resultat")
 
-# --- VISNING AV SPARADE RESULTAT ---
-
-st.subheader("📋 Resultat")
 if st.session_state.search_ran:
-    saved_results = st.session_state.search_results
+    results = st.session_state.search_results
     diagnostics = st.session_state.search_diagnostics
 
-    with st.expander("🔎 Sökdiagnostik"):
-        for source in diagnostics.get("sources", []):
-            status = "hämtad" if source.get("fetched") else "fetch misslyckades / tomt svar"
-            st.write(
-                f"**{source['platform']}** — {status}, extraherade jobb: {source['jobs_extracted']}"
-            )
+    top1, top2, top3 = st.columns(3)
+    top1.metric("Visade jobb", len(results))
+    top2.metric("Sökord", st.session_state.last_query or "-")
+    top3.metric("Plats", st.session_state.last_location or "-")
 
-        st.write(f"**Före dubblettfilter:** {diagnostics.get('before_dedup', 0)}")
-        st.write(f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")
-        st.write(f"**Efter AI-scorefilter:** {diagnostics.get('after_score_filter', 0)}")
-        st.write(f"**Efter valda UI-filter:** {len(saved_results)}")
+    st.caption(
+        f"Senaste sökning: {st.session_state.last_query} i {st.session_state.last_location} "
+        f"• Min score: {st.session_state.last_min_score}%"
+    )
 
-    if not saved_results:
+    render_search_diagnostics(diagnostics, len(results))
+
+    if not results:
         st.info(
-            "🤷‍♂️ Hittade inga jobb som klarade både matchningskravet och dina valda filter. "
-            "Prova att ändra filtren!"
+            "Inga jobb klarade både matchningskravet och dina valda filter. "
+            "Testa lägre min score eller bredare sökord."
         )
     else:
-        st.success(f"✅ Sökning klar! Hittade {len(saved_results)} unika jobb som passar dina krav.")
-
-        st.caption(
-            f"Senaste sökning: {st.session_state.last_query} i {st.session_state.last_location} "
-            f"(min score: {st.session_state.last_min_score}%)"
-        )
-
-        csv_data = jobs_to_csv(saved_results)
+        csv_data = jobs_to_csv(results)
         st.download_button(
-            label="📥 Ladda ner resultat som CSV",
+            label="Ladda ner resultat som CSV",
             data=csv_data,
             file_name="job_results.csv",
             mime="text/csv",
             use_container_width=True,
         )
 
-        for job in saved_results:
-            score = job.match_score or 0
-            color = "🟢" if score >= 80 else "🟡" if score >= 60 else "🔴"
+        for job in results:
+            render_search_result_card(job)
+else:
+    st.caption("Ingen sökning har körts ännu.")
 
-            link = job.application_url
-            if not link or str(link).lower() == "none":
-                link = build_fallback_job_link(job)
-                link_label = "🔍 Googla jobbet (Länk saknas)"
-            else:
-                link_label = "🔗 Gå till ansökan"
+st.divider()
 
-            badges = []
-            if job.work_mode and job.work_mode.lower() != "none":
-                badges.append(f"🏠 {job.work_mode}")
-            if job.employment_type and job.employment_type.lower() != "none":
-                badges.append(f"⏱️ {job.employment_type}")
-            badge_str = " | ".join(badges)
-
-            with st.expander(f"{color} [{score}%] {job.title} @ {job.company}"):
-                c1, c2 = st.columns(2)
-                c1.write(f"**📍 Plats:** {job.location}")
-                c2.write(f"**🌐 Källa:** {job.source_platform}")
-
-                if is_job_saved(job):
-                    st.success("✅ Sparat jobb")
-                    if st.button(
-                        f"🗑️ Ta bort från sparade: {job.title} @ {job.company}",
-                        key=f"unsave_{get_job_key(job)}"
-                    ):
-                        remove_job(job)
-                        st.rerun()
-                else:
-                    if st.button(
-                        f"⭐ Spara jobb: {job.title} @ {job.company}",
-                        key=f"save_{get_job_key(job)}"
-                    ):
-                        save_job(job)
-                        st.rerun()
-
-                if badge_str:
-                    st.write(f"**Upplägg:** {badge_str}")
-
-                if job.match_strengths:
-                    st.write("**✅ Styrkor:**")
-                    for item in job.match_strengths:
-                        st.write(f"- {item}")
-
-                if job.match_gaps:
-                    st.write("**⚠️ Saknas / Svagheter:**")
-                    for item in job.match_gaps:
-                        st.write(f"- {item}")
-
-                if job.match_recommendation:
-                    st.info(f"**💡 Rekommendation:** {job.match_recommendation}")
-
-                st.markdown(f"[{link_label}]({link})")
-                
-# --- SPARADE JOBB ---
+st.subheader("Sparade jobb")
 
 if st.session_state.saved_jobs:
-    st.subheader("⭐ Sparade jobb")
-
     saved_csv_data = jobs_to_csv(st.session_state.saved_jobs)
     st.download_button(
-        label="📥 Ladda ner sparade jobb som CSV",
+        label="Ladda ner sparade jobb som CSV",
         data=saved_csv_data,
         file_name="saved_jobs.csv",
         mime="text/csv",
@@ -246,116 +391,6 @@ if st.session_state.saved_jobs:
     )
 
     for job in st.session_state.saved_jobs:
-        score = job.match_score or 0
-        color = "🟢" if score >= 80 else "🟡" if score >= 60 else "🔴"
-
-        link = job.application_url
-        if not link or str(link).lower() == "none":
-            link = build_fallback_job_link(job)
-            link_label = "🔍 Googla jobbet (Länk saknas)"
-        else:
-            link_label = "🔗 Gå till ansökan"
-
-        badges = []
-        if job.work_mode and job.work_mode.lower() != "none":
-            badges.append(f"🏠 {job.work_mode}")
-        if job.employment_type and job.employment_type.lower() != "none":
-            badges.append(f"⏱️ {job.employment_type}")
-        badge_str = " | ".join(badges)
-
-        with st.expander(f"{color} [{score}%] {job.title} @ {job.company}"):
-            c1, c2 = st.columns(2)
-            c1.write(f"**📍 Plats:** {job.location}")
-            c2.write(f"**🌐 Källa:** {job.source_platform}")
-
-            status_options = ["Ej ansökt", "Ansökt", "Intervju", "Avslag"]
-            current_status = job.status if job.status in status_options else "Ej ansökt"
-
-            new_status = st.selectbox(
-                "Status",
-                status_options,
-                index=status_options.index(current_status),
-                key=f"status_{get_job_key(job)}"
-            )
-
-            if new_status != current_status:
-                update_job_status(job, new_status)
-                st.rerun()
-
-            if st.button(
-                f"✍️ Generera ansökningspaket: {job.title} @ {job.company}",
-                key=f"pack_{get_job_key(job)}"
-            ):
-                with st.spinner("Genererar ansökningspaket..."):
-                    pack = asyncio.run(generate_application_pack(job, st.session_state.cv_text))
-                    if pack:
-                        save_application_pack(job, pack)
-                        st.rerun()
-                    else:
-                        st.error("Kunde inte generera ansökningspaket.")
-
-            if st.button(
-                f"🗑️ Ta bort: {job.title} @ {job.company}",
-                key=f"remove_{get_job_key(job)}"
-            ):
-                remove_job(job)
-                st.rerun()
-
-            if badge_str:
-                st.write(f"**Upplägg:** {badge_str}")
-
-            if job.match_strengths:
-                st.write("**✅ Styrkor:**")
-                for item in job.match_strengths:
-                    st.write(f"- {item}")
-
-            if job.match_gaps:
-                st.write("**⚠️ Saknas / Svagheter:**")
-                for item in job.match_gaps:
-                    st.write(f"- {item}")
-
-            if job.match_recommendation:
-                st.info(f"**💡 Rekommendation:** {job.match_recommendation}")
-
-            if job.short_motivation or job.cover_letter:
-                st.caption("Markera och kopiera texten direkt härifrån.")
-
-            if job.short_motivation:
-                st.write("**📝 Kort motivation:**")
-                st.text_area(
-                    "Kort motivation",
-                    value=job.short_motivation,
-                    height=100,
-                    key=f"motivation_{get_job_key(job)}"
-                )
-
-            if job.cover_letter:
-                st.write("**📄 Personligt brev:**")
-                st.text_area(
-                    "Personligt brev",
-                    value=job.cover_letter,
-                    height=220,
-                    key=f"cover_letter_{get_job_key(job)}"
-                )
-
-            if job.cv_tailoring_tips:
-                st.write("**🎯 CV-anpassning:**")
-                for tip in job.cv_tailoring_tips:
-                    st.write(f"- {tip}")
-
-            if job.short_motivation or job.cover_letter or job.cv_tailoring_tips:
-                pack_text = build_application_pack_text(job)
-                safe_company = (job.company or "company").replace(" ", "_")
-                safe_title = (job.title or "job").replace(" ", "_")
-
-                st.download_button(
-                    label="📄 Ladda ner ansökningspaket (.txt)",
-                    data=pack_text,
-                    file_name=f"application_pack_{safe_company}_{safe_title}.txt",
-                    mime="text/plain",
-                    key=f"download_pack_{get_job_key(job)}"
-                )
-
-            st.markdown(f"[{link_label}]({link})")
+        render_saved_job_card(job)
 else:
     st.caption("Inga sparade jobb ännu.")
