@@ -78,11 +78,11 @@ def render_job_meta(job: JobListing):
     score = job.match_score or 0
     badges = build_badges(job)
 
-    col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns(2)
     with col1:
-        st.write(f"**📍 Plats:** {job.location or 'Ej angivet'}")
+        st.write(f"**Plats:** {job.location or 'Ej angivet'}")
     with col2:
-        st.write(f"**🎯 Matchning:** {score}%")
+        st.write(f"**Matchning:** {score}%")
 
     if badges:
         st.caption(" • ".join(badges))
@@ -103,7 +103,11 @@ def render_match_analysis(job: JobListing):
         st.info(job.match_recommendation)
 
 
-def apply_ui_filters(jobs: list[JobListing], filter_remote: bool, filter_fulltime: bool) -> list[JobListing]:
+def apply_ui_filters(
+    jobs: list[JobListing],
+    filter_remote: bool,
+    filter_fulltime: bool
+) -> list[JobListing]:
     filtered_jobs = []
 
     for job in jobs:
@@ -120,6 +124,18 @@ def apply_ui_filters(jobs: list[JobListing], filter_remote: bool, filter_fulltim
         filtered_jobs.append(job)
 
     return filtered_jobs
+
+
+def sort_jobs(jobs: list[JobListing], sort_by: str) -> list[JobListing]:
+    if sort_by == "Högst matchning":
+        return sorted(jobs, key=lambda job: job.match_score or 0, reverse=True)
+    if sort_by == "Lägst matchning":
+        return sorted(jobs, key=lambda job: job.match_score or 0)
+    if sort_by == "Företag A-Ö":
+        return sorted(jobs, key=lambda job: (job.company or "").lower())
+    if sort_by == "Titel A-Ö":
+        return sorted(jobs, key=lambda job: (job.title or "").lower())
+    return jobs
 
 
 def render_search_diagnostics(diagnostics: dict, visible_results_count: int):
@@ -151,16 +167,27 @@ def render_search_result_card(job: JobListing):
 
         render_job_meta(job)
 
-        col1, col2 = st.columns([1, 1])
+        if job.match_recommendation:
+            st.caption(f"Bedömning: {job.match_recommendation}")
+
+        col1, col2 = st.columns(2)
 
         with col1:
             if is_job_saved(job):
                 st.success("Sparat")
-                if st.button("Ta bort från sparade", key=f"unsave_{job_key}", use_container_width=True):
+                if st.button(
+                    "Ta bort från sparade",
+                    key=f"unsave_{job_key}",
+                    use_container_width=True
+                ):
                     remove_job(job)
                     st.rerun()
             else:
-                if st.button("Spara jobb", key=f"save_{job_key}", use_container_width=True):
+                if st.button(
+                    "Spara jobb",
+                    key=f"save_{job_key}",
+                    use_container_width=True
+                ):
                     save_job(job)
                     st.rerun()
 
@@ -203,7 +230,11 @@ def render_saved_job_card(job: JobListing):
         col1, col2 = st.columns(2)
 
         with col1:
-            if st.button("Generera ansökningspaket", key=f"pack_{job_key}", use_container_width=True):
+            if st.button(
+                "Generera ansökningspaket",
+                key=f"pack_{job_key}",
+                use_container_width=True
+            ):
                 with st.spinner("Genererar ansökningspaket..."):
                     pack = asyncio.run(generate_application_pack(job, st.session_state.cv_text))
                     if pack:
@@ -213,7 +244,11 @@ def render_saved_job_card(job: JobListing):
                         st.error("Kunde inte generera ansökningspaket.")
 
         with col2:
-            if st.button("Ta bort", key=f"remove_{job_key}", use_container_width=True):
+            if st.button(
+                "Ta bort",
+                key=f"remove_{job_key}",
+                use_container_width=True
+            ):
                 remove_job(job)
                 st.rerun()
 
@@ -269,8 +304,8 @@ def render_saved_job_card(job: JobListing):
 # UI
 # -------------------------
 
-st.title("💼 AI Job Search Agent")
-st.caption("Ladda upp ditt CV, sök jobb och spara de roller som passar bäst.")
+st.title("💼 AI Jobb-Agent")
+st.caption("Ladda upp ditt CV, sök jobb och spara roller som passar din profil.")
 
 with st.sidebar:
     st.header("Sökning")
@@ -338,59 +373,87 @@ if start_search:
             except Exception as e:
                 st.error(f"Ett fel uppstod: {e}")
 
-st.subheader("Resultat")
+tab_results, tab_saved = st.tabs(["Resultat", "Sparade jobb"])
 
-if st.session_state.search_ran:
-    results = st.session_state.search_results
-    diagnostics = st.session_state.search_diagnostics
+with tab_results:
+    st.subheader("Resultat")
 
-    top1, top2, top3 = st.columns(3)
-    top1.metric("Visade jobb", len(results))
-    top2.metric("Sökord", st.session_state.last_query or "-")
-    top3.metric("Plats", st.session_state.last_location or "-")
+    if st.session_state.search_ran:
+        results = st.session_state.search_results
+        diagnostics = st.session_state.search_diagnostics
 
-    st.caption(
-        f"Senaste sökning: {st.session_state.last_query} i {st.session_state.last_location} "
-        f"• Min score: {st.session_state.last_min_score}%"
-    )
+        info1, info2, info3 = st.columns(3)
+        with info1:
+            st.info(f"**Visade jobb:** {len(results)}")
+        with info2:
+            st.info(f"**Sökord:** {st.session_state.last_query or '-'}")
+        with info3:
+            st.info(f"**Plats:** {st.session_state.last_location or '-'}")
 
-    render_search_diagnostics(diagnostics, len(results))
-
-    if not results:
-        st.info(
-            "Inga jobb klarade både matchningskravet och dina valda filter. "
-            "Testa lägre min score eller bredare sökord."
+        st.caption(
+            f"Senaste sökning: {st.session_state.last_query} i {st.session_state.last_location} "
+            f"• Min score: {st.session_state.last_min_score}%"
         )
+
+        render_search_diagnostics(diagnostics, len(results))
+
+        if not results:
+            after_score_filter = diagnostics.get("after_score_filter", 0)
+
+            if after_score_filter > 0:
+                st.info(
+                    "Det finns jobb efter AI-filtreringen, men inga klarade dina valda UI-filter. "
+                    "Testa att stänga av distans/hybrid eller heltid-filtret."
+                )
+            else:
+                st.info(
+                    "Inga jobb klarade matchningskravet. "
+                    "Testa lägre min score eller bredare sökord."
+                )
+        else:
+            sort_by = st.selectbox(
+                "Sortera resultat",
+                ["Högst matchning", "Lägst matchning", "Företag A-Ö", "Titel A-Ö"],
+            )
+
+            sorted_results = sort_jobs(results, sort_by)
+
+            csv_data = jobs_to_csv(sorted_results)
+            st.download_button(
+                label="Ladda ner resultat som CSV",
+                data=csv_data,
+                file_name="job_results.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+            for job in sorted_results:
+                render_search_result_card(job)
     else:
-        csv_data = jobs_to_csv(results)
+        st.caption("Ingen sökning har körts ännu.")
+
+with tab_saved:
+    st.subheader("Sparade jobb")
+
+    if st.session_state.saved_jobs:
+        saved_sort_by = st.selectbox(
+            "Sortera sparade jobb",
+            ["Högst matchning", "Lägst matchning", "Företag A-Ö", "Titel A-Ö"],
+            key="saved_sort",
+        )
+
+        sorted_saved_jobs = sort_jobs(st.session_state.saved_jobs, saved_sort_by)
+
+        saved_csv_data = jobs_to_csv(sorted_saved_jobs)
         st.download_button(
-            label="Ladda ner resultat som CSV",
-            data=csv_data,
-            file_name="job_results.csv",
+            label="Ladda ner sparade jobb som CSV",
+            data=saved_csv_data,
+            file_name="saved_jobs.csv",
             mime="text/csv",
             use_container_width=True,
         )
 
-        for job in results:
-            render_search_result_card(job)
-else:
-    st.caption("Ingen sökning har körts ännu.")
-
-st.divider()
-
-st.subheader("Sparade jobb")
-
-if st.session_state.saved_jobs:
-    saved_csv_data = jobs_to_csv(st.session_state.saved_jobs)
-    st.download_button(
-        label="Ladda ner sparade jobb som CSV",
-        data=saved_csv_data,
-        file_name="saved_jobs.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
-
-    for job in st.session_state.saved_jobs:
-        render_saved_job_card(job)
-else:
-    st.caption("Inga sparade jobb ännu.")
+        for job in sorted_saved_jobs:
+            render_saved_job_card(job)
+    else:
+        st.caption("Inga sparade jobb ännu.")
