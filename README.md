@@ -1,5 +1,3 @@
----
-
 # AI Job Search Agent
 
 An AI‑powered job search application built with **Streamlit** to find, analyze, save, and track job postings based on a candidate’s CV.
