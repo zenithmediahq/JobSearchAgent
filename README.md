@@ -192,7 +192,6 @@ The app currently supports:
 
 Potential next steps:
 
-- improved README with screenshots  
 - UI polish  
 - enhanced diagnostics  
 - more export formats  
