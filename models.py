@@ -41,3 +41,34 @@ class ApplicationPack(BaseModel):
     short_motivation: str
     cover_letter: str
     cv_tailoring_tips: list[str]
+
+
+class ResumeSectionScore(BaseModel):
+    section: str
+    score: int
+    findings: list[str]
+
+
+class KeywordGap(BaseModel):
+    keyword: str
+    importance: str
+    present_in_cv: bool
+    evidence: str | None = None
+
+
+class BulletRewriteSuggestion(BaseModel):
+    original: str
+    suggestion: str
+    reason: str
+
+class ResumeScanResult(BaseModel):
+    overall_score: str
+    summary: str
+    strengths: str
+    weaknesses: list[str]
+    missing_sections: list[str]
+    ats_risks: list[str]
+    section_scores: list[ResumeSectionScore]
+    keyword_gaps: list[KeywordGap]
+    bullet_suggestions: list[BulletRewriteSuggestion]
+    recommended_keywords: list[str]
