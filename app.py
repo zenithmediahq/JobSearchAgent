@@ -153,6 +153,7 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int):
                 st.caption(source["url"])
 
             st.write(f"Markdown-tecken: {source.get('markdown_chars', 0)}")
+            st.write(f"Efter AI-scorefilter: {source.get('after_score_filter', 0)}")
 
         st.write(f"**Före dubblettfilter:** {diagnostics.get('before_dedup', 0)}")
         st.write(f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")

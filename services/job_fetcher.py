@@ -3,6 +3,7 @@ import logging
 import httpx
 import urllib.parse
 
+from typing import Any
 from models import JobListing, JobListings
 from services.ai_client import get_api_key, get_ai_client
 from services.job_scoring import score_jobs_with_ai
@@ -72,7 +73,12 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
         return []
 
 
-async def run_search_workflow(query: str, location: str, skills: str, min_score: int):
+async def run_search_workflow(
+    query: str,
+    location: str,
+    skills: str,
+    min_score: int,
+) -> tuple[list[JobListing], dict[str, Any]]:
     q_enc = urllib.parse.quote(query)
     l_enc = urllib.parse.quote(location)
 
@@ -95,13 +101,14 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
         },
     ]
 
-    async def process_source(source):
-        diagnostics = {
+    async def process_source(source: dict[str, str]) -> tuple[list[JobListing], dict[str, Any]]:
+        diagnostics: dict[str, Any] = {
             "platform": source["platform"],
             "url": source["url"],
             "fetched": False,
             "markdown_chars": 0,
             "jobs_extracted": 0,
+            "after_score_filter": 0,
         }
 
         md = await fetch_webpage(source["url"])
@@ -109,7 +116,6 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
 
         if md.strip():
             diagnostics["fetched"] = True
-
 
         extracted = await extract_jobs_with_ai(md, source["url"])
         diagnostics["jobs_extracted"] = len(extracted)
@@ -119,10 +125,10 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
 
         return extracted, diagnostics
 
-    results = await asyncio.gather(*(process_source(s) for s in sources))
+    results = await asyncio.gather(*(process_source(source) for source in sources))
 
-    diagnostics_by_source = []
-    all_jobs_raw = []
+    diagnostics_by_source: list[dict[str, Any]] = []
+    all_jobs_raw: list[JobListing] = []
 
     for extracted_jobs, source_diag in results:
         diagnostics_by_source.append(source_diag)
@@ -130,8 +136,8 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
 
     before_dedup = len(all_jobs_raw)
 
-    all_jobs = []
-    seen_jobs = set()
+    all_jobs: list[JobListing] = []
+    seen_jobs: set[str] = set()
 
     for job in all_jobs_raw:
         title_key = (job.title or "").lower().strip()
@@ -145,10 +151,15 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
     after_dedup = len(all_jobs)
 
     scored_jobs = await score_jobs_with_ai(all_jobs, skills)
-    filtered_jobs = [job for job in scored_jobs if (
-        job.match_score or 0) >= min_score]
+    filtered_jobs = [job for job in scored_jobs if (job.match_score or 0) >= min_score]
 
-    diagnostics = {
+    for source_diag in diagnostics_by_source:
+        platform = source_diag["platform"]
+        source_diag["after_score_filter"] = sum(
+            1 for job in filtered_jobs if job.source_platform == platform
+        )
+
+    diagnostics: dict[str, Any] = {
         "sources": diagnostics_by_source,
         "before_dedup": before_dedup,
         "after_dedup": after_dedup,
@@ -156,3 +167,4 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
     }
 
     return filtered_jobs, diagnostics
+
