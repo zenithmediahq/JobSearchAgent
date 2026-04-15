@@ -7,7 +7,7 @@ from models import JobListing
 from services.cv_parser import extract_text_from_upload
 from services.application_pack import generate_application_pack
 from services.job_fetcher import run_search_workflow
-from services.resume_scanner import scan_resume_with_ai
+from ui.scanner_tab import render_scanner_tab
 from utils.job_state import (
     get_job_key,
     is_job_saved,
@@ -160,7 +160,6 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int):
         st.write(f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")
         st.write(f"**Efter AI-scorefilter:** {diagnostics.get('after_score_filter', 0)}")
         st.write(f"**Efter valda UI-filter:** {visible_results_count}")
-
 
 def render_search_result_card(job: JobListing):
     score = job.match_score or 0
@@ -366,6 +365,7 @@ elif cv_text_input.strip():
 
 if final_cv_text != st.session_state.last_scanned_cv_text:
     st.session_state.resume_scan_result = None
+    st.session_state.last_scanned_job_key = ""
 
 search_col1, search_col2 = st.columns([2, 1])
 
@@ -500,126 +500,4 @@ with tab_saved:
         st.caption("Inga sparade jobb ännu.")
 
 with tab_scanner:
-    st.subheader("CV Scanner")
-    st.caption(
-        "Analysera ditt CV för ATS-risker, saknade sektioner, nyckelord och förbättringsförslag."
-    )
-
-    target_job = None
-
-    if st.session_state.saved_jobs:
-        saved_job_options = {
-            f"{job.title} — {job.company}": job
-            for job in st.session_state.saved_jobs
-        }
-
-        selected_job_label = st.selectbox(
-            "Anpassa analysen mot sparat jobb",
-            ["Generell CV-analys", *saved_job_options.keys()],
-        )
-
-        if selected_job_label != "Generell CV-analys":
-            target_job = saved_job_options[selected_job_label]
-    else:
-        st.caption("Spara ett jobb för att kunna analysera CV:t mot en specifik roll.")
-
-    current_scan_key = get_job_key(target_job) if target_job else "generic"
-
-
-    if not final_cv_text.strip():
-        st.info("Ladda upp ett CV eller klistra in CV-text för att kunna köra scannern.")
-    else:
-        button_label = "Analysera CV mot valt jobb" if target_job else "Analysera CV"
-
-        if st.button(button_label, type="primary", use_container_width=True):
-
-            with st.spinner("Analyserar CV mot ATS-kriterier..."):
-                scan_result = asyncio.run(scan_resume_with_ai(final_cv_text, target_job))
-
-                if scan_result:
-                    st.session_state.resume_scan_result = scan_result
-                    st.session_state.last_scanned_cv_text = final_cv_text
-                    st.session_state.last_scanned_job_key = current_scan_key
-                else:
-                    st.error("Kunde inte analysera CV:t just nu. Om du nyligen gjort flera sökningar kan Gemini-kvoten vara slut.")
-
-
-        result = st.session_state.resume_scan_result
-
-        if result and st.session_state.last_scanned_job_key != current_scan_key:
-            result = None
-
-
-        if result:
-            st.metric("ATS-score", f"{result.overall_score}/100")
-
-            st.write("**Sammanfattning**")
-            st.info(result.summary)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.write("**Styrkor**")
-                if result.strengths:
-                    for item in result.strengths:
-                        st.write(f"- {item}")
-                else:
-                    st.caption("Inga tydliga styrkor hittades.")
-
-            with col2:
-                st.write("**Svagheter**")
-                if result.weaknesses:
-                    for item in result.weaknesses:
-                        st.write(f"- {item}")
-                else:
-                    st.caption("Inga tydliga svagheter hittades.")
-
-            st.write("**Saknade sektioner**")
-            if result.missing_sections:
-                for item in result.missing_sections:
-                    st.write(f"- {item}")
-            else:
-                st.caption("Inga uppenbara saknade sektioner hittades.")
-
-            st.write("**ATS-risker**")
-            if result.ats_risks:
-                for item in result.ats_risks:
-                    st.write(f"- {item}")
-            else:
-                st.caption("Inga tydliga ATS-risker hittades.")
-
-            st.write("**Sektionspoäng**")
-            if result.section_scores:
-                for section in result.section_scores:
-                    with st.expander(f"{section.section}: {section.score}/100"):
-                        for finding in section.findings:
-                            st.write(f"- {finding}")
-            else:
-                st.caption("Ingen sektionsanalys returnerades.")
-
-            st.write("**Nyckelordsgap**")
-            if result.keyword_gaps:
-                for gap in result.keyword_gaps:
-                    status = "Finns i CV" if gap.present_in_cv else "Saknas i CV"
-                    st.write(f"**{gap.keyword}** — {gap.importance} — {status}")
-                    if gap.evidence:
-                        st.caption(gap.evidence)
-            else:
-                st.caption("Inga tydliga nyckelordsgap hittades.")
-
-            st.write("**Förslag på omskrivna bullets**")
-            if result.bullet_suggestions:
-                for suggestion in result.bullet_suggestions:
-                    with st.expander(suggestion.original):
-                        st.write("**Förslag**")
-                        st.write(suggestion.suggestion)
-                        st.write("**Varför**")
-                        st.write(suggestion.reason)
-            else:
-                st.caption("Inga bullet-förslag returnerades.")
-
-            st.write("**Rekommenderade nyckelord**")
-            if result.recommended_keywords:
-                st.write(", ".join(result.recommended_keywords))
-            else:
-                st.caption("Inga rekommenderade nyckelord returnerades.")
+    render_scanner_tab(final_cv_text)
