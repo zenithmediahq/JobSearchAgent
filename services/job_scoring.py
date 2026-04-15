@@ -1,15 +1,41 @@
 import logging
 
+import hashlib
 from models import JobListing, ScoringResult
 from services.ai_client import get_ai_client
 
 AI_MODEL = "gemini-2.5-flash"
+SCORING_CACHE: dict[str, list[JobListing]] = {}
 logger = logging.getLogger(__name__)
+
+
+def build_job_identity(job: JobListing) -> str:
+    return "|".join([
+        (job.title or "").strip().lower(),
+        (job.company or "").strip().lower(),
+        (job.location or "").strip().lower(),
+        (job.source_platform or "").strip().lower(),
+    ])
+
+
+def build_scoring_cache_key(jobs: list[JobListing], skills: str) -> str:
+    job_identities = sorted(build_job_identity(job) for job in jobs)
+    raw_key = "\n".join([
+        skills.strip(),
+        *job_identities,
+    ])
+    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
 async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobListing]:
     if not jobs:
         return []
+
+    cache_key = build_scoring_cache_key(jobs, skills)
+
+    if cache_key in SCORING_CACHE:
+        logger.info("Using cached AI scoring result")
+        return [job.model_copy(deep=True) for job in SCORING_CACHE[cache_key]]
 
     job_summaries = [
         f"[{i}] {j.title} @ {j.company} | {j.description[:2000]}"
@@ -52,9 +78,9 @@ async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobLis
         if parsed is None:
             logger.warning("AI scoring returned no parsed result")
             return jobs
-        
+
         score_map = {s.index: s for s in parsed.scored_jobs}
-        
+
         for i, job in enumerate(jobs):
             if i in score_map:
                 scored = score_map[i]
@@ -64,6 +90,7 @@ async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobLis
                 job.match_recommendation = scored.recommendation
 
         jobs.sort(key=lambda j: j.match_score or 0, reverse=True)
+        SCORING_CACHE[cache_key] = [job.model_copy(deep=True) for job in jobs]
 
     except Exception as e:
         logger.error(f"Scoring fel: {e}")
