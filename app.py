@@ -37,6 +37,7 @@ DEFAULT_SESSION_VALUES = {
     "last_location": "",
     "last_min_score": 0,
     "last_scanned_cv_text": "",
+    "last_scanned_job_key": "",
     "cv_text": "",
     "search_diagnostics": {},
     "resume_scan_result": None,
@@ -504,21 +505,50 @@ with tab_scanner:
         "Analysera ditt CV för ATS-risker, saknade sektioner, nyckelord och förbättringsförslag."
     )
 
+    target_job = None
+
+    if st.session_state.saved_jobs:
+        saved_job_options = {
+            f"{job.title} — {job.company}": job
+            for job in st.session_state.saved_jobs
+        }
+
+        selected_job_label = st.selectbox(
+            "Anpassa analysen mot sparat jobb",
+            ["Generell CV-analys", *saved_job_options.keys()],
+        )
+
+        if selected_job_label != "Generell CV-analys":
+            target_job = saved_job_options[selected_job_label]
+    else:
+        st.caption("Spara ett jobb för att kunna analysera CV:t mot en specifik roll.")
+
+    current_scan_key = get_job_key(target_job) if target_job else "generic"
+
+
     if not final_cv_text.strip():
         st.info("Ladda upp ett CV eller klistra in CV-text för att kunna köra scannern.")
     else:
-        if st.button("Analysera CV", type="primary", use_container_width=True):
+        button_label = "Analysera CV mot valt jobb" if target_job else "Analysera CV"
+
+        if st.button(button_label, type="primary", use_container_width=True):
+
             with st.spinner("Analyserar CV mot ATS-kriterier..."):
-                scan_result = asyncio.run(scan_resume_with_ai(final_cv_text))
+                scan_result = asyncio.run(scan_resume_with_ai(final_cv_text, target_job))
 
                 if scan_result:
                     st.session_state.resume_scan_result = scan_result
                     st.session_state.last_scanned_cv_text = final_cv_text
+                    st.session_state.last_scanned_job_key = current_scan_key
                 else:
                     st.error("Kunde inte analysera CV:t just nu. Om du nyligen gjort flera sökningar kan Gemini-kvoten vara slut.")
 
 
         result = st.session_state.resume_scan_result
+
+        if result and st.session_state.last_scanned_job_key != current_scan_key:
+            result = None
+
 
         if result:
             st.metric("ATS-score", f"{result.overall_score}/100")
