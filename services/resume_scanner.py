@@ -1,6 +1,7 @@
 import logging
 
 from models import JobListing, ResumeScanResult
+from openai import RateLimitError
 from services.ai_client import get_ai_client
 
 AI_MODEL = "gemini-2.5-flash"
@@ -68,6 +69,10 @@ async def scan_resume_with_ai(
             logger.warning("Resume scan returned no parsed result")
             return None
         return parsed
+    
+    except RateLimitError as e:
+        logger.error(f"Resume scan quota/rate limit error: {e}")
+        return None
     
     except Exception as e:
         logger.exception("Resume scan error")

@@ -487,7 +487,7 @@ with tab_scanner:
                     st.session_state.resume_scan_result = scan_result
                     st.session_state.last_scanned_cv_text = final_cv_text
                 else:
-                    st.error("Kunde inte analysera CV:t just nu.")
+                    st.error("Kunde inte analysera CV:t just nu. Om du nyligen gjort flera sökningar kan Gemini-kvoten vara slut.")
 
 
         result = st.session_state.resume_scan_result
