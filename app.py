@@ -7,6 +7,7 @@ from models import JobListing
 from services.cv_parser import extract_text_from_upload
 from services.application_pack import generate_application_pack
 from services.job_fetcher import run_search_workflow
+from services.resume_scanner import scan_resume_with_ai
 from utils.job_state import (
     get_job_key,
     is_job_saved,
@@ -37,6 +38,7 @@ DEFAULT_SESSION_VALUES = {
     "last_min_score": 0,
     "cv_text": "",
     "search_diagnostics": {},
+    "resume_scan_results": None,
 }
 
 for key, value in DEFAULT_SESSION_VALUES.items():

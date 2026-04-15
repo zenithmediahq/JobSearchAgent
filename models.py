@@ -62,9 +62,9 @@ class BulletRewriteSuggestion(BaseModel):
     reason: str
 
 class ResumeScanResult(BaseModel):
-    overall_score: str
+    overall_score: int
     summary: str
-    strengths: str
+    strengths: list[str]
     weaknesses: list[str]
     missing_sections: list[str]
     ats_risks: list[str]
