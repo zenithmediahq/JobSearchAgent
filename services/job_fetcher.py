@@ -11,6 +11,7 @@ from services.job_scoring import score_jobs_with_ai
 LINKUP_API_URL = "https://api.linkup.so/v1/fetch"
 AI_MODEL = "gemini-2.5-flash"
 MAX_CONTENT_CHARS = 50000
+SOURCE_EXTRACTION_CACHE: dict[str, tuple[list[JobListing], dict[str, Any]]] = {}
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,47 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
         logger.error(f"AI Extraktionsfel: {e}")
         return []
 
+async def fetch_and_extract_source(source: dict[str, str]) -> tuple[list[JobListing], dict[str, Any]]:
+    cache_key = source["url"]
+
+    if cache_key in SOURCE_EXTRACTION_CACHE:
+        cached_jobs, cached_diagnostics = SOURCE_EXTRACTION_CACHE[cache_key]
+
+        jobs = [job.model_copy(deep=True) for job in cached_jobs]
+        diagnostics = dict(cached_diagnostics)
+        diagnostics["cached"] = True
+
+        return jobs, diagnostics
+
+    diagnostics: dict[str, Any] = {
+        "platform": source["platform"],
+        "url": source["url"],
+        "fetched": False,
+        "markdown_chars": 0,
+        "jobs_extracted": 0,
+        "after_score_filter": 0,
+        "cached": False,
+    }
+
+    md = await fetch_webpage(source["url"])
+    diagnostics["markdown_chars"] = len(md)
+
+    if md.strip():
+        diagnostics["fetched"] = True
+
+    extracted = await extract_jobs_with_ai(md, source["url"])
+    diagnostics["jobs_extracted"] = len(extracted)
+
+    for job in extracted:
+        job.source_platform = source["platform"]
+
+    SOURCE_EXTRACTION_CACHE[cache_key] = (
+        [job.model_copy(deep=True) for job in extracted],
+        dict(diagnostics),
+    )
+
+    return extracted, diagnostics
+
 
 async def run_search_workflow(
     query: str,
@@ -118,31 +160,7 @@ async def run_search_workflow(
         }
         return [], diagnostics
 
-    async def process_source(source: dict[str, str]) -> tuple[list[JobListing], dict[str, Any]]:
-        diagnostics: dict[str, Any] = {
-            "platform": source["platform"],
-            "url": source["url"],
-            "fetched": False,
-            "markdown_chars": 0,
-            "jobs_extracted": 0,
-            "after_score_filter": 0,
-        }
-
-        md = await fetch_webpage(source["url"])
-        diagnostics["markdown_chars"] = len(md)
-
-        if md.strip():
-            diagnostics["fetched"] = True
-
-        extracted = await extract_jobs_with_ai(md, source["url"])
-        diagnostics["jobs_extracted"] = len(extracted)
-
-        for job in extracted:
-            job.source_platform = source["platform"]
-
-        return extracted, diagnostics
-
-    results = await asyncio.gather(*(process_source(source) for source in sources))
+    results = await asyncio.gather(*(fetch_and_extract_source(source) for source in sources))
 
     diagnostics_by_source: list[dict[str, Any]] = []
     all_jobs_raw: list[JobListing] = []

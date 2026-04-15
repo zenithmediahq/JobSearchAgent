@@ -91,6 +91,9 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int) -> 
             st.write(f"Markdown-tecken: {source.get('markdown_chars', 0)}")
             st.write(f"Efter AI-scorefilter: {source.get('after_score_filter', 0)}")
 
+            if source.get("cached"):
+                st.caption("Cache: återanvänd extraktion")
+
         st.write(f"**Före dubblettfilter:** {diagnostics.get('before_dedup', 0)}")
         st.write(f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")
         st.write(f"**Efter AI-scorefilter:** {diagnostics.get('after_score_filter', 0)}")
