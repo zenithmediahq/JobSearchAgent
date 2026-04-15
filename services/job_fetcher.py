@@ -98,13 +98,18 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
     async def process_source(source):
         diagnostics = {
             "platform": source["platform"],
+            "url": source["url"],
             "fetched": False,
+            "markdown_chars": 0,
             "jobs_extracted": 0,
         }
 
         md = await fetch_webpage(source["url"])
+        diagnostics["markdown_chars"] = len(md)
+
         if md.strip():
             diagnostics["fetched"] = True
+
 
         extracted = await extract_jobs_with_ai(md, source["url"])
         diagnostics["jobs_extracted"] = len(extracted)

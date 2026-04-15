@@ -149,6 +149,11 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int):
                 f"**{source['platform']}** — {status}, extraherade jobb: {source['jobs_extracted']}"
             )
 
+            if source.get("url"):
+                st.caption(source["url"])
+
+            st.write(f"Markdown-tecken: {source.get('markdown_chars', 0)}")
+
         st.write(f"**Före dubblettfilter:** {diagnostics.get('before_dedup', 0)}")
         st.write(f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")
         st.write(f"**Efter AI-scorefilter:** {diagnostics.get('after_score_filter', 0)}")
