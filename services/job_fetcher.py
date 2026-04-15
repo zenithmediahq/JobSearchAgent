@@ -78,6 +78,7 @@ async def run_search_workflow(
     location: str,
     skills: str,
     min_score: int,
+    selected_sources: list[str] | None = None,
 ) -> tuple[list[JobListing], dict[str, Any]]:
     q_enc = urllib.parse.quote(query)
     l_enc = urllib.parse.quote(location)
@@ -100,6 +101,22 @@ async def run_search_workflow(
             "platform": "JobbSafari",
         },
     ]
+
+    if selected_sources is not None:
+        selected_source_names = set(selected_sources)
+        sources = [
+            source for source in sources
+            if source["platform"] in selected_source_names
+        ]
+
+    if not sources:
+        diagnostics: dict[str, Any] = {
+            "sources": [],
+            "before_dedup": 0,
+            "after_dedup": 0,
+            "after_score_filter": 0,
+        }
+        return [], diagnostics
 
     async def process_source(source: dict[str, str]) -> tuple[list[JobListing], dict[str, Any]]:
         diagnostics: dict[str, Any] = {
@@ -167,4 +184,5 @@ async def run_search_workflow(
     }
 
     return filtered_jobs, diagnostics
+
 

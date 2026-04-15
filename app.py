@@ -327,6 +327,22 @@ with st.sidebar:
     filter_remote = st.checkbox("Endast distans / hybrid")
     filter_fulltime = st.checkbox("Endast heltid")
 
+    st.markdown("---")
+    st.header("Jobbkällor")
+
+    source_options = {
+        "Platsbanken": st.checkbox("Platsbanken", value=True),
+        "Indeed": st.checkbox("Indeed", value=True),
+        "LinkedIn": st.checkbox("LinkedIn", value=False),
+        "JobbSafari": st.checkbox("JobbSafari", value=False),
+    }
+
+    selected_sources = [
+        source for source, enabled in source_options.items()
+        if enabled
+    ]
+
+
 st.subheader("Din profil")
 
 uploaded_file = st.file_uploader(
@@ -361,12 +377,24 @@ with search_col2:
 if start_search:
     if not final_cv_text.strip():
         st.warning("Du behöver ladda upp ett CV eller klistra in CV-text först.")
+    elif not selected_sources:
+        st.warning("Välj minst en jobbsajt att söka i.")
     else:
         with st.spinner("Söker källor, läser annonser och poängsätter matchning..."):
+
             try:
-                all_found_jobs, diagnostics = asyncio.run(
-                    run_search_workflow(query, location, final_cv_text, min_score)
+                search_result = asyncio.run(
+                    run_search_workflow(
+                        query,
+                        location,
+                        final_cv_text,
+                        min_score,
+                        selected_sources,
+                    )
                 )
+
+                all_found_jobs, diagnostics = search_result
+
 
                 filtered_jobs = apply_ui_filters(
                     all_found_jobs,
