@@ -9,6 +9,8 @@ from services.job_fetcher import run_search_workflow
 from ui.scanner_tab import render_scanner_tab
 from ui.results_tab import render_results_tab
 from ui.saved_jobs_tab import render_saved_jobs_tab
+from ui.profile_input import render_profile_input
+from ui.sidebar import render_sidebar
 
 
 # -------------------------
@@ -76,52 +78,10 @@ def apply_ui_filters(
 st.title("💼 AI Jobb-Agent")
 st.caption("Ladda upp ditt CV, sök jobb och spara roller som passar din profil.")
 
-with st.sidebar:
-    st.header("Sökning")
-    query = st.text_input("Jobbtitel eller sökord", value="IT support")
-    location = st.text_input("Plats", value="Skåne")
-    min_score = st.slider("Minsta matchning (%)", 0, 100, 40, 5)
-
-    st.markdown("---")
-    st.header("Filter")
-    filter_remote = st.checkbox("Endast distans / hybrid")
-    filter_fulltime = st.checkbox("Endast heltid")
-
-    st.markdown("---")
-    st.header("Jobbkällor")
-
-    source_options = {
-        "Platsbanken": st.checkbox("Platsbanken", value=True),
-        "Indeed": st.checkbox("Indeed", value=True),
-        "LinkedIn": st.checkbox("LinkedIn", value=False),
-        "JobbSafari": st.checkbox("JobbSafari", value=False),
-    }
-
-    selected_sources = [
-        source for source, enabled in source_options.items()
-        if enabled
-    ]
+query, location, min_score, filter_remote, filter_fulltime, selected_sources = render_sidebar()
 
 
-st.subheader("Din profil")
-
-uploaded_file = st.file_uploader(
-    "Ladda upp CV (PDF, DOCX eller TXT)",
-    type=["pdf", "docx", "txt"],
-)
-
-cv_text_input = st.text_area(
-    "Eller klistra in CV-text manuellt",
-    height=140,
-    placeholder="Klistra in din CV-text här...",
-)
-
-final_cv_text = ""
-if uploaded_file is not None:
-    final_cv_text = extract_text_from_upload(uploaded_file)
-    st.success(f"Filen '{uploaded_file.name}' är inläst.")
-elif cv_text_input.strip():
-    final_cv_text = cv_text_input.strip()
+final_cv_text = render_profile_input()
 
 if final_cv_text != st.session_state.last_scanned_cv_text:
     st.session_state.resume_scan_result = None
