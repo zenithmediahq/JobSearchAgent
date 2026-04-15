@@ -2,6 +2,7 @@ import asyncio
 import logging
 import streamlit as st
 
+from utils.session_state import init_session_state
 from utils.export import build_fallback_job_link, jobs_to_csv
 from models import JobListing
 from services.cv_parser import extract_text_from_upload
@@ -22,26 +23,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # -------------------------
-# SESSION STATE
+# SESSION STATE RENDER
 # -------------------------
 
-DEFAULT_SESSION_VALUES = {
-    "search_results": [],
-    "saved_jobs": [],
-    "search_ran": False,
-    "last_query": "",
-    "last_location": "",
-    "last_min_score": 0,
-    "last_scanned_cv_text": "",
-    "last_scanned_job_key": "",
-    "cv_text": "",
-    "search_diagnostics": {},
-    "resume_scan_result": None,
-}
-
-for key, value in DEFAULT_SESSION_VALUES.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+init_session_state()
 
 
 # -------------------------
