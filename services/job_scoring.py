@@ -47,8 +47,14 @@ async def score_jobs_with_ai(jobs: list[JobListing], skills: str) -> list[JobLis
             response_format=ScoringResult,
         )
 
-        score_map = {s.index: s for s in response.choices[0].message.parsed.scored_jobs}
+        parsed = response.choices[0].message.parsed
 
+        if parsed is None:
+            logger.warning("AI scoring returned no parsed result")
+            return jobs
+        
+        score_map = {s.index: s for s in parsed.scored_jobs}
+        
         for i, job in enumerate(jobs):
             if i in score_map:
                 scored = score_map[i]

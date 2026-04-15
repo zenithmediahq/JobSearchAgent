@@ -59,7 +59,14 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
             ],
             response_format=JobListings,
         )
-        return response.choices[0].message.parsed.jobs
+        
+        parsed = response.choices[0].message.parsed
+
+        if parsed is None:
+            logger.warning(f"AI extraction returned no parsed jobs for {url}")
+            return []
+
+        return parsed.jobs
     except Exception as e:
         logger.error(f"AI Extraktionsfel: {e}")
         return []
@@ -133,7 +140,8 @@ async def run_search_workflow(query: str, location: str, skills: str, min_score:
     after_dedup = len(all_jobs)
 
     scored_jobs = await score_jobs_with_ai(all_jobs, skills)
-    filtered_jobs = [job for job in scored_jobs if (job.match_score or 0) >= min_score]
+    filtered_jobs = [job for job in scored_jobs if (
+        job.match_score or 0) >= min_score]
 
     diagnostics = {
         "sources": diagnostics_by_source,

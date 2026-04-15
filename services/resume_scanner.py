@@ -62,8 +62,13 @@ async def scan_resume_with_ai(
             response_format=ResumeScanResult,
         )
 
-        return response.choices[0].message.parsed
+        parsed = response.choices[0].message.parsed
 
+        if parsed is None:
+            logger.warning("Resume scan returned no parsed result")
+            return None
+        return parsed
+    
     except Exception as e:
-        logger.error(f"Resume scan error: {e}")
-        return None
+        logger.exception("Resume scan error")
+        raise
