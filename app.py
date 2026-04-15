@@ -36,9 +36,10 @@ DEFAULT_SESSION_VALUES = {
     "last_query": "",
     "last_location": "",
     "last_min_score": 0,
+    "last_scanned_cv_text": "",
     "cv_text": "",
     "search_diagnostics": {},
-    "resume_scan_results": None,
+    "resume_scan_result": None,
 }
 
 for key, value in DEFAULT_SESSION_VALUES.items():
@@ -340,6 +341,9 @@ if uploaded_file is not None:
 elif cv_text_input.strip():
     final_cv_text = cv_text_input.strip()
 
+if final_cv_text != st.session_state.last_scanned_cv_text:
+    st.session_state.resume_scan_result = None
+
 search_col1, search_col2 = st.columns([2, 1])
 
 with search_col1:
@@ -375,7 +379,7 @@ if start_search:
             except Exception as e:
                 st.error(f"Ett fel uppstod: {e}")
 
-tab_results, tab_saved = st.tabs(["Resultat", "Sparade jobb"])
+tab_results, tab_saved, tab_scanner = st.tabs(["Resultat", "Sparade jobb", "CV Scanner"])
 
 with tab_results:
     st.subheader("Resultat")
@@ -459,3 +463,99 @@ with tab_saved:
             render_saved_job_card(job)
     else:
         st.caption("Inga sparade jobb ännu.")
+
+with tab_scanner:
+    st.subheader("CV Scanner")
+    st.caption(
+        "Analysera ditt CV för ATS-risker, saknade sektioner, nyckelord och förbättringsförslag."
+    )
+
+    if not final_cv_text.strip():
+        st.info("Ladda upp ett CV eller klistra in CV-text för att kunna köra scannern.")
+    else:
+        if st.button("Analysera CV", type="primary", use_container_width=True):
+            with st.spinner("Analyserar CV mot ATS-kriterier..."):
+                scan_result = asyncio.run(scan_resume_with_ai(final_cv_text))
+
+                if scan_result:
+                    st.session_state.resume_scan_result = scan_result
+                    st.session_state.last_scanned_cv_text = final_cv_text
+                else:
+                    st.error("Kunde inte analysera CV:t just nu.")
+
+
+        result = st.session_state.resume_scan_result
+
+        if result:
+            st.metric("ATS-score", f"{result.overall_score}/100")
+
+            st.write("**Sammanfattning**")
+            st.info(result.summary)
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.write("**Styrkor**")
+                if result.strengths:
+                    for item in result.strengths:
+                        st.write(f"- {item}")
+                else:
+                    st.caption("Inga tydliga styrkor hittades.")
+
+            with col2:
+                st.write("**Svagheter**")
+                if result.weaknesses:
+                    for item in result.weaknesses:
+                        st.write(f"- {item}")
+                else:
+                    st.caption("Inga tydliga svagheter hittades.")
+
+            st.write("**Saknade sektioner**")
+            if result.missing_sections:
+                for item in result.missing_sections:
+                    st.write(f"- {item}")
+            else:
+                st.caption("Inga uppenbara saknade sektioner hittades.")
+
+            st.write("**ATS-risker**")
+            if result.ats_risks:
+                for item in result.ats_risks:
+                    st.write(f"- {item}")
+            else:
+                st.caption("Inga tydliga ATS-risker hittades.")
+
+            st.write("**Sektionspoäng**")
+            if result.section_scores:
+                for section in result.section_scores:
+                    with st.expander(f"{section.section}: {section.score}/100"):
+                        for finding in section.findings:
+                            st.write(f"- {finding}")
+            else:
+                st.caption("Ingen sektionsanalys returnerades.")
+
+            st.write("**Nyckelordsgap**")
+            if result.keyword_gaps:
+                for gap in result.keyword_gaps:
+                    status = "Finns i CV" if gap.present_in_cv else "Saknas i CV"
+                    st.write(f"**{gap.keyword}** — {gap.importance} — {status}")
+                    if gap.evidence:
+                        st.caption(gap.evidence)
+            else:
+                st.caption("Inga tydliga nyckelordsgap hittades.")
+
+            st.write("**Förslag på omskrivna bullets**")
+            if result.bullet_suggestions:
+                for suggestion in result.bullet_suggestions:
+                    with st.expander(suggestion.original):
+                        st.write("**Förslag**")
+                        st.write(suggestion.suggestion)
+                        st.write("**Varför**")
+                        st.write(suggestion.reason)
+            else:
+                st.caption("Inga bullet-förslag returnerades.")
+
+            st.write("**Rekommenderade nyckelord**")
+            if result.recommended_keywords:
+                st.write(", ".join(result.recommended_keywords))
+            else:
+                st.caption("Inga rekommenderade nyckelord returnerades.")
