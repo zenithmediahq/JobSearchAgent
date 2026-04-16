@@ -87,6 +87,15 @@ def get_editable_value(key: str, default_value: str) -> str:
 
     return st.session_state[key]
 
+def reset_tailored_edit_fields() -> None:
+    keys_to_delete = [
+        key for key in st.session_state.keys()
+        if isinstance(key, str) and key.startswith("tailored_edit_")
+    ]
+
+    for key in keys_to_delete:
+        del st.session_state[key]
+
 def build_edited_tailored_resume_report(result: TailoredResumeResult) -> str:
     lines = [
         "Skräddarsytt CV-utkast",
@@ -299,6 +308,7 @@ def render_tailored_resume_tab(final_cv_text: str) -> None:
             result = asyncio.run(tailor_resume_with_ai(final_cv_text, target_job))
 
             if result:
+                reset_tailored_edit_fields()
                 st.session_state.tailored_resume_result = result
                 st.session_state.last_tailored_cv_text = final_cv_text
                 st.session_state.last_tailored_job_key = current_builder_key
@@ -306,6 +316,7 @@ def render_tailored_resume_tab(final_cv_text: str) -> None:
                 st.error(
                     "Kunde inte skapa CV-utkast just nu. Om du nyligen gjort flera AI-körningar kan Gemini-kvoten vara slut."
                 )
+
 
     result = st.session_state.tailored_resume_result
 
