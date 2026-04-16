@@ -81,22 +81,39 @@ def select_builder_target_job(saved_jobs: list[JobListing]) -> JobListing | None
 
     return saved_job_options[selected_job_label]
 
+def get_editable_value(key: str, default_value: str) -> str:
+    if key not in st.session_state:
+        st.session_state[key] = default_value
+
+    return st.session_state[key]
+
 
 def render_tailored_resume_result(result: TailoredResumeResult) -> None:
     st.write("**Positionering**")
-    st.info(result.positioning_summary)
+    positioning_key = "tailored_edit_positioning_summary"
+    positioning_value = get_editable_value(positioning_key, result.positioning_summary)
+    st.text_area(
+        "Positionering",
+        value=positioning_value,
+        height=120,
+        key=positioning_key,
+        label_visibility="collapsed",
+    )
 
     st.write("**Omskriven profil**")
+    profile_key = "tailored_edit_rewritten_profile"
+    profile_value = get_editable_value(profile_key, result.rewritten_profile)
     st.text_area(
         "Omskriven profil",
-        value=result.rewritten_profile,
+        value=profile_value,
         height=140,
+        key=profile_key,
         label_visibility="collapsed",
     )
 
     report_text = build_tailored_resume_report(result)
     st.download_button(
-        label="Ladda ner skräddarsytt CV-utkast (.txt)",
+        label="Ladda ner originalutkast (.txt)",
         data=report_text,
         file_name="tailored_resume_draft.txt",
         mime="text/plain",
@@ -104,22 +121,49 @@ def render_tailored_resume_result(result: TailoredResumeResult) -> None:
     )
 
     st.write("**Sektioner**")
-    for section in result.sections:
+    for section_index, section in enumerate(result.sections):
         with st.expander(section.heading):
             st.write("**Strategi**")
-            st.write(section.strategy)
+            strategy_key = f"tailored_edit_section_{section_index}_strategy"
+            strategy_value = get_editable_value(strategy_key, section.strategy)
+            st.text_area(
+                "Strategi",
+                value=strategy_value,
+                height=100,
+                key=strategy_key,
+                label_visibility="collapsed",
+            )
 
             if section.content:
                 st.write("**Innehåll**")
-                for item in section.content:
-                    st.write(f"- {item}")
+                for item_index, item in enumerate(section.content):
+                    content_key = f"tailored_edit_section_{section_index}_content_{item_index}"
+                    content_value = get_editable_value(content_key, item)
+                    st.text_area(
+                        f"Innehåll {item_index + 1}",
+                        value=content_value,
+                        height=80,
+                        key=content_key,
+                        label_visibility="collapsed",
+                    )
 
             if section.bullets:
                 st.write("**Bullet-förslag**")
-                for bullet in section.bullets:
+                for bullet_index, bullet in enumerate(section.bullets):
                     if bullet.original:
                         st.caption(f"Original: {bullet.original}")
-                    st.write(f"- {bullet.tailored}")
+
+                    bullet_key = (
+                        f"tailored_edit_section_{section_index}_bullet_{bullet_index}"
+                    )
+                    bullet_value = get_editable_value(bullet_key, bullet.tailored)
+                    st.text_area(
+                        f"Bullet {bullet_index + 1}",
+                        value=bullet_value,
+                        height=90,
+                        key=bullet_key,
+                        label_visibility="collapsed",
+                    )
                     st.caption(f"Varför: {bullet.reason}")
 
     col1, col2 = st.columns(2)
