@@ -87,6 +87,85 @@ def get_editable_value(key: str, default_value: str) -> str:
 
     return st.session_state[key]
 
+def build_edited_tailored_resume_report(result: TailoredResumeResult) -> str:
+    lines = [
+        "Skräddarsytt CV-utkast",
+        "",
+        f"Målroll: {result.target_role}",
+        f"Företag: {result.target_company}",
+        "",
+        "Positionering",
+        st.session_state.get(
+            "tailored_edit_positioning_summary",
+            result.positioning_summary,
+        ),
+        "",
+        "Omskriven profil",
+        st.session_state.get(
+            "tailored_edit_rewritten_profile",
+            result.rewritten_profile,
+        ),
+        "",
+        "Sektioner",
+    ]
+
+    for section_index, section in enumerate(result.sections):
+        lines.extend([
+            "",
+            section.heading,
+            "Strategi:",
+            st.session_state.get(
+                f"tailored_edit_section_{section_index}_strategy",
+                section.strategy,
+            ),
+        ])
+
+        if section.content:
+            lines.append("Innehåll:")
+            for item_index, item in enumerate(section.content):
+                lines.append(
+                    "- "
+                    + st.session_state.get(
+                        f"tailored_edit_section_{section_index}_content_{item_index}",
+                        item,
+                    )
+                )
+
+        if section.bullets:
+            lines.append("Bullet-förslag:")
+            for bullet_index, bullet in enumerate(section.bullets):
+                if bullet.original:
+                    lines.append(f"- Original: {bullet.original}")
+
+                lines.append(
+                    "  Förslag: "
+                    + st.session_state.get(
+                        f"tailored_edit_section_{section_index}_bullet_{bullet_index}",
+                        bullet.tailored,
+                    )
+                )
+                lines.append(f"  Varför: {bullet.reason}")
+
+    lines.extend([
+        "",
+        "Nyckelord som används",
+        ", ".join(result.keywords_used),
+        "",
+        "Nyckelord att lägga till om de är sanna",
+        ", ".join(result.keywords_to_add),
+        "",
+        "Saknas men ska inte hittas på",
+    ])
+    lines.extend(f"- {item}" for item in result.missing_but_not_invented)
+
+    lines.extend([
+        "",
+        "Rekryteraranteckningar",
+    ])
+    lines.extend(f"- {item}" for item in result.recruiter_notes)
+
+    return "\n".join(lines)
+
 
 def render_tailored_resume_result(result: TailoredResumeResult) -> None:
     st.write("**Positionering**")
@@ -111,14 +190,15 @@ def render_tailored_resume_result(result: TailoredResumeResult) -> None:
         label_visibility="collapsed",
     )
 
-    report_text = build_tailored_resume_report(result)
+    edited_report_text = build_edited_tailored_resume_report(result)
     st.download_button(
-        label="Ladda ner originalutkast (.txt)",
-        data=report_text,
-        file_name="tailored_resume_draft.txt",
+        label="Ladda ner redigerat CV-utkast (.txt)",
+        data=edited_report_text,
+        file_name="tailored_resume_draft_edited.txt",
         mime="text/plain",
         use_container_width=True,
     )
+
 
     st.write("**Sektioner**")
     for section_index, section in enumerate(result.sections):
