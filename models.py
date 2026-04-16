@@ -72,3 +72,27 @@ class ResumeScanResult(BaseModel):
     keyword_gaps: list[KeywordGap]
     bullet_suggestions: list[BulletRewriteSuggestion]
     recommended_keywords: list[str]
+
+class TailoredResumeBullet(BaseModel):
+    original: str | None = None
+    tailored: str
+    reason: str
+
+
+class TailoredResumeSection(BaseModel):
+    heading: str
+    strategy: str
+    content: list[str]
+    bullets: list[TailoredResumeBullet]
+
+
+class TailoredResumeResult(BaseModel):
+    target_role: str
+    target_company: str
+    positioning_summary: str
+    rewritten_profile: str
+    sections: list[TailoredResumeSection]
+    keywords_used: list[str]
+    keywords_to_add: list[str]
+    missing_but_not_invented: list[str]
+    recruiter_notes: list[str]
