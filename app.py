@@ -12,6 +12,7 @@ from ui.results_tab import render_results_tab
 from ui.saved_jobs_tab import render_saved_jobs_tab
 from ui.profile_input import render_profile_input
 from ui.sidebar import render_sidebar
+from ui.tailored_resume_tab import render_tailored_resume_tab
 
 
 # -------------------------
@@ -72,6 +73,11 @@ if final_cv_text != st.session_state.last_scanned_cv_text:
     st.session_state.resume_scan_result = None
     st.session_state.last_scanned_job_key = ""
 
+if final_cv_text != st.session_state.last_tailored_cv_text:
+    st.session_state.tailored_resume_result = None
+    st.session_state.last_tailored_job_key = ""
+
+
 search_col1, search_col2 = st.columns([2, 1])
 
 with search_col1:
@@ -119,7 +125,10 @@ if start_search:
             except Exception as e:
                 st.error(f"Ett fel uppstod: {e}")
 
-tab_results, tab_saved, tab_scanner = st.tabs(["Resultat", "Sparade jobb", "CV Scanner"])
+tab_results, tab_saved, tab_scanner, tab_builder = st.tabs(
+    ["Resultat", "Sparade jobb", "CV Scanner", "CV Builder"]
+
+)
 
 with tab_results:
     render_results_tab()
@@ -129,3 +138,6 @@ with tab_saved:
 
 with tab_scanner:
     render_scanner_tab(final_cv_text)
+
+with tab_builder:
+    render_tailored_resume_tab(final_cv_text)

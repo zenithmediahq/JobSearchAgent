@@ -10,6 +10,10 @@ DEFAULT_SESSION_VALUES = {
     "last_min_score": 0,
     "last_scanned_cv_text": "",
     "last_scanned_job_key": "",
+    "tailored_resume_result": None,
+    "last_tailored_cv_text": "",
+    "last_tailored_job_key": "",
+
     "cv_text": "",
     "search_diagnostics": {},
     "resume_scan_result": None,
