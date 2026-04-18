@@ -16,7 +16,7 @@ SOURCE_EXTRACTION_CACHE: dict[str, tuple[list[JobListing], dict[str, Any]]] = {}
 logger = logging.getLogger(__name__)
 
 
-async def fetch_webpage(url: str) -> str:
+async def fetch_webpage(url: str) -> tuple[str, str | None]:
     headers = {
         "Authorization": f"Bearer {get_api_key('LINKUP_API_KEY')}",
         "Content-Type": "application/json",
@@ -32,10 +32,17 @@ async def fetch_webpage(url: str) -> str:
         try:
             response = await client.post(LINKUP_API_URL, headers=headers, json=payload)
             response.raise_for_status()
-            return response.json().get("markdown", "")
+            return response.json().get("markdown", ""), None
+
+        except httpx.HTTPStatusError as e:
+            error_message = f"HTTP {e.response.status_code}: {e.response.text[:300]}"
+            logger.warning(f"Kunde inte läsa {url}: {error_message}")
+            return "", error_message
+
         except Exception as e:
-            logger.warning(f"Kunde inte läsa {url}: {e}")
-            return ""
+            error_message = str(e)
+            logger.warning(f"Kunde inte läsa {url}: {error_message}")
+            return "", error_message
 
 
 async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
@@ -61,7 +68,7 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
             ],
             response_format=JobListings,
         )
-        
+
         parsed = response.choices[0].message.parsed
 
         if parsed is None:
@@ -72,6 +79,7 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
     except Exception as e:
         logger.error(f"AI Extraktionsfel: {e}")
         return []
+
 
 async def fetch_and_extract_source(source: dict[str, str]) -> tuple[list[JobListing], dict[str, Any]]:
     cache_key = source["url"]
@@ -95,8 +103,10 @@ async def fetch_and_extract_source(source: dict[str, str]) -> tuple[list[JobList
         "cached": False,
     }
 
-    md = await fetch_webpage(source["url"])
+    md, fetch_error = await fetch_webpage(source["url"])
+    diagnostics["fetch_error"] = fetch_error
     diagnostics["markdown_chars"] = len(md)
+
 
     if md.strip():
         diagnostics["fetched"] = True
@@ -186,7 +196,8 @@ async def run_search_workflow(
     after_dedup = len(all_jobs)
 
     scored_jobs = await score_jobs_with_ai(all_jobs, skills)
-    filtered_jobs = [job for job in scored_jobs if (job.match_score or 0) >= min_score]
+    filtered_jobs = [job for job in scored_jobs if (
+        job.match_score or 0) >= min_score]
 
     for source_diag in diagnostics_by_source:
         platform = source_diag["platform"]
@@ -202,5 +213,3 @@ async def run_search_workflow(
     }
 
     return filtered_jobs, diagnostics
-
-

@@ -1,7 +1,7 @@
 import logging
 
 from models import JobListing, ResumeScanResult
-from openai import RateLimitError
+from openai import APIStatusError, OpenAIError, RateLimitError
 from services.ai_client import get_ai_client
 
 AI_MODEL = "gemini-2.5-flash"
@@ -73,7 +73,15 @@ async def scan_resume_with_ai(
     except RateLimitError as e:
         logger.error(f"Resume scan quota/rate limit error: {e}")
         return None
-    
-    except Exception as e:
-        logger.exception("Resume scan error")
-        raise
+
+    except APIStatusError as e:
+        logger.error(f"Resume scan API status error: {e}")
+        return None
+
+    except OpenAIError as e:
+        logger.error(f"Resume scan OpenAI-compatible API error: {e}")
+        return None
+
+    except Exception:
+        logger.exception("Unexpected resume scan error")
+        return None

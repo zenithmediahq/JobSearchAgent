@@ -80,7 +80,8 @@ def sort_jobs(jobs: list[JobListing], sort_by: str) -> list[JobListing]:
 def render_search_diagnostics(diagnostics: dict, visible_results_count: int) -> None:
     with st.expander("Visa sökdiagnostik"):
         for source in diagnostics.get("sources", []):
-            status = "hämtad" if source.get("fetched") else "misslyckades / tomt svar"
+            status = "hämtad" if source.get(
+                "fetched") else "misslyckades / tomt svar"
             st.write(
                 f"**{source['platform']}** — {status}, extraherade jobb: {source['jobs_extracted']}"
             )
@@ -89,14 +90,22 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int) -> 
                 st.caption(source["url"])
 
             st.write(f"Markdown-tecken: {source.get('markdown_chars', 0)}")
+
+            if source.get("fetch_error"):
+                st.error(f"Fetch-fel: {source.get('fetch_error')}")
+
+
             st.write(f"Efter AI-scorefilter: {source.get('after_score_filter', 0)}")
 
             if source.get("cached"):
                 st.caption("Cache: återanvänd extraktion")
 
-        st.write(f"**Före dubblettfilter:** {diagnostics.get('before_dedup', 0)}")
-        st.write(f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")
-        st.write(f"**Efter AI-scorefilter:** {diagnostics.get('after_score_filter', 0)}")
+        st.write(
+            f"**Före dubblettfilter:** {diagnostics.get('before_dedup', 0)}")
+        st.write(
+            f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")
+        st.write(
+            f"**Efter AI-scorefilter:** {diagnostics.get('after_score_filter', 0)}")
         st.write(f"**Efter valda UI-filter:** {visible_results_count}")
 
 
