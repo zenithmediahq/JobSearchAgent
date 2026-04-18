@@ -13,6 +13,13 @@ def render_sidebar() -> dict[str, Any]:
             "Dölj jobb under min score",
             value=False,
         )
+        pages_per_source = st.slider(
+            "Sidor per källa",
+            min_value=1,
+            max_value=3,
+            value=1,
+        )
+
 
         st.markdown("---")
         st.header("Filter")
@@ -42,4 +49,5 @@ def render_sidebar() -> dict[str, Any]:
         "filter_fulltime": filter_fulltime,
         "selected_sources": selected_sources,
         "filter_by_score": filter_by_score,
+        "pages_per_source": pages_per_source,
     }

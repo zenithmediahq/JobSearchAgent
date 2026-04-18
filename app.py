@@ -74,7 +74,7 @@ filter_remote = sidebar_values["filter_remote"]
 filter_fulltime = sidebar_values["filter_fulltime"]
 selected_sources = sidebar_values["selected_sources"]
 filter_by_score = sidebar_values["filter_by_score"]
-
+pages_per_source = sidebar_values["pages_per_source"]
 
 
 final_cv_text = render_profile_input()
@@ -114,6 +114,7 @@ if start_search:
                         min_score,
                         selected_sources,
                         filter_by_score,
+                        pages_per_source,
                     )
                 )
 

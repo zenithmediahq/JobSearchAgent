@@ -133,15 +133,26 @@ async def run_search_workflow(
     min_score: int,
     selected_sources: list[str] | None = None,
     filter_by_score: bool = True,
+    pages_per_source: int = 1,
 ) -> tuple[list[JobListing], dict[str, Any]]:
     q_enc = urllib.parse.quote(query)
     l_enc = urllib.parse.quote(location)
+    pages_per_source = max(1, min(pages_per_source, 3))
 
-    sources = [
-        {
-            "url": f"https://arbetsformedlingen.se/platsbanken/annonser?q={q_enc}%20{l_enc}",
-            "platform": "Platsbanken",
-        },
+    sources: list[dict[str, str]] = []
+
+    for page in range(1, pages_per_source + 1):
+        sources.append(
+            {
+                "url": (
+                    "https://arbetsformedlingen.se/platsbanken/annonser"
+                    f"?q={q_enc}%20{l_enc}&page={page}"
+                ),
+                "platform": "Platsbanken",
+            }
+        )
+
+    sources.extend([
         {
             "url": f"https://se.indeed.com/jobs?q={q_enc}&l={l_enc}",
             "platform": "Indeed",
@@ -154,7 +165,7 @@ async def run_search_workflow(
             "url": f"https://jobbsafari.se/jobb?q={q_enc}&l={l_enc}",
             "platform": "JobbSafari",
         },
-    ]
+    ])
 
     if selected_sources is not None:
         selected_source_names = set(selected_sources)
@@ -169,10 +180,14 @@ async def run_search_workflow(
             "before_dedup": 0,
             "after_dedup": 0,
             "after_score_filter": 0,
+            "score_filter_enabled": filter_by_score,
+            "returned_results": 0,
         }
         return [], diagnostics
 
-    results = await asyncio.gather(*(fetch_and_extract_source(source) for source in sources))
+    results = await asyncio.gather(
+        *(fetch_and_extract_source(source) for source in sources)
+    )
 
     diagnostics_by_source: list[dict[str, Any]] = []
     all_jobs_raw: list[JobListing] = []
