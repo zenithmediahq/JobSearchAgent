@@ -65,15 +65,16 @@ def apply_ui_filters(
 st.title("💼 AI Jobb-Agent")
 st.caption("Ladda upp ditt CV, sök jobb och spara roller som passar din profil.")
 
-(
-    query,
-    location,
-    min_score,
-    filter_remote,
-    filter_fulltime,
-    selected_sources,
-    filter_by_score,
-) = render_sidebar()
+sidebar_values = render_sidebar()
+
+query = sidebar_values["query"]
+location = sidebar_values["location"]
+min_score = sidebar_values["min_score"]
+filter_remote = sidebar_values["filter_remote"]
+filter_fulltime = sidebar_values["filter_fulltime"]
+selected_sources = sidebar_values["selected_sources"]
+filter_by_score = sidebar_values["filter_by_score"]
+
 
 
 final_cv_text = render_profile_input()

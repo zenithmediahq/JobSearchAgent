@@ -1,7 +1,9 @@
+from typing import Any
+
 import streamlit as st
 
 
-def render_sidebar() -> tuple[str, str, int, bool, bool, list[str], bool]:
+def render_sidebar() -> dict[str, Any]:
     with st.sidebar:
         st.header("Sökning")
         query = st.text_input("Jobbtitel eller sökord", value="IT support")
@@ -32,12 +34,12 @@ def render_sidebar() -> tuple[str, str, int, bool, bool, list[str], bool]:
             if enabled
         ]
 
-    return (
-        query,
-        location,
-        min_score,
-        filter_remote,
-        filter_fulltime,
-        selected_sources,
-        filter_by_score,
-    )
+    return {
+        "query": query,
+        "location": location,
+        "min_score": min_score,
+        "filter_remote": filter_remote,
+        "filter_fulltime": filter_fulltime,
+        "selected_sources": selected_sources,
+        "filter_by_score": filter_by_score,
+    }
