@@ -11,7 +11,8 @@ from services.job_scoring import score_jobs_with_ai
 LINKUP_API_URL = "https://api.linkup.so/v1/fetch"
 AI_MODEL = "gemini-2.5-flash"
 MAX_CONTENT_CHARS = 50000
-SOURCE_EXTRACTION_CACHE: dict[str, tuple[list[JobListing], dict[str, Any]]] = {}
+SOURCE_EXTRACTION_CACHE: dict[str,
+                              tuple[list[JobListing], dict[str, Any]]] = {}
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,6 @@ async def fetch_and_extract_source(source: dict[str, str]) -> tuple[list[JobList
     diagnostics["fetch_error"] = fetch_error
     diagnostics["markdown_chars"] = len(md)
 
-
     if md.strip():
         diagnostics["fetched"] = True
 
@@ -117,10 +117,11 @@ async def fetch_and_extract_source(source: dict[str, str]) -> tuple[list[JobList
     for job in extracted:
         job.source_platform = source["platform"]
 
-    SOURCE_EXTRACTION_CACHE[cache_key] = (
-        [job.model_copy(deep=True) for job in extracted],
-        dict(diagnostics),
-    )
+    if diagnostics["fetch_error"] is None:
+        SOURCE_EXTRACTION_CACHE[cache_key] = (
+            [job.model_copy(deep=True) for job in extracted],
+            dict(diagnostics),
+        )
 
     return extracted, diagnostics
 
@@ -197,14 +198,15 @@ async def run_search_workflow(
     after_dedup = len(all_jobs)
 
     scored_jobs = await score_jobs_with_ai(all_jobs, skills)
-    matched_jobs = [job for job in scored_jobs if (job.match_score or 0) >= min_score]
+    matched_jobs = [job for job in scored_jobs if (
+        job.match_score or 0) >= min_score]
     returned_jobs = matched_jobs if filter_by_score else scored_jobs
 
     for source_diag in diagnostics_by_source:
         platform = source_diag["platform"]
         source_diag["after_score_filter"] = sum(
-        1 for job in matched_jobs if job.source_platform == platform
-    )
+            1 for job in matched_jobs if job.source_platform == platform
+        )
 
     diagnostics: dict[str, Any] = {
         "sources": diagnostics_by_source,
@@ -216,4 +218,3 @@ async def run_search_workflow(
     }
 
     return returned_jobs, diagnostics
-
