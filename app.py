@@ -61,10 +61,19 @@ def apply_ui_filters(
 # UI
 # -------------------------
 
+
 st.title("💼 AI Jobb-Agent")
 st.caption("Ladda upp ditt CV, sök jobb och spara roller som passar din profil.")
 
-query, location, min_score, filter_remote, filter_fulltime, selected_sources = render_sidebar()
+(
+    query,
+    location,
+    min_score,
+    filter_remote,
+    filter_fulltime,
+    selected_sources,
+    filter_by_score,
+) = render_sidebar()
 
 
 final_cv_text = render_profile_input()
@@ -81,7 +90,8 @@ if final_cv_text != st.session_state.last_tailored_cv_text:
 search_col1, search_col2 = st.columns([2, 1])
 
 with search_col1:
-    start_search = st.button("Starta AI-sökning", type="primary", use_container_width=True)
+    start_search = st.button(
+        "Starta AI-sökning", type="primary", use_container_width=True)
 
 with search_col2:
     st.metric("Min score", f"{min_score}%")
@@ -102,11 +112,11 @@ if start_search:
                         final_cv_text,
                         min_score,
                         selected_sources,
+                        filter_by_score,
                     )
                 )
 
                 all_found_jobs, diagnostics = search_result
-
 
                 filtered_jobs = apply_ui_filters(
                     all_found_jobs,

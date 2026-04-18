@@ -1,12 +1,16 @@
 import streamlit as st
 
 
-def render_sidebar() -> tuple[str, str, int, bool, bool, list[str]]:
+def render_sidebar() -> tuple[str, str, int, bool, bool, list[str], bool]:
     with st.sidebar:
         st.header("Sökning")
         query = st.text_input("Jobbtitel eller sökord", value="IT support")
         location = st.text_input("Plats", value="Skåne")
         min_score = st.slider("Minsta matchning (%)", 0, 100, 40, 5)
+        filter_by_score = st.checkbox(
+            "Dölj jobb under min score",
+            value=False,
+        )
 
         st.markdown("---")
         st.header("Filter")
@@ -35,4 +39,5 @@ def render_sidebar() -> tuple[str, str, int, bool, bool, list[str]]:
         filter_remote,
         filter_fulltime,
         selected_sources,
+        filter_by_score,
     )

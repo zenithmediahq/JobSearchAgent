@@ -94,8 +94,8 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int) -> 
             if source.get("fetch_error"):
                 st.error(f"Fetch-fel: {source.get('fetch_error')}")
 
-
-            st.write(f"Efter AI-scorefilter: {source.get('after_score_filter', 0)}")
+            st.write(
+                f"Efter AI-scorefilter: {source.get('after_score_filter', 0)}")
 
             if source.get("cached"):
                 st.caption("Cache: återanvänd extraktion")
@@ -106,6 +106,12 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int) -> 
             f"**Efter dubblettfilter:** {diagnostics.get('after_dedup', 0)}")
         st.write(
             f"**Efter AI-scorefilter:** {diagnostics.get('after_score_filter', 0)}")
+        score_filter_enabled = diagnostics.get("score_filter_enabled", True)
+        filter_status = "på" if score_filter_enabled else "av"
+        st.write(f"**Scorefilter:** {filter_status}")
+        st.write(
+            f"**Returnerade resultat:** {diagnostics.get('returned_results', 0)}")
+
         st.write(f"**Efter valda UI-filter:** {visible_results_count}")
 
 

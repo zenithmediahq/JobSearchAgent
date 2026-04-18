@@ -131,6 +131,7 @@ async def run_search_workflow(
     skills: str,
     min_score: int,
     selected_sources: list[str] | None = None,
+    filter_by_score: bool = True,
 ) -> tuple[list[JobListing], dict[str, Any]]:
     q_enc = urllib.parse.quote(query)
     l_enc = urllib.parse.quote(location)
@@ -196,20 +197,23 @@ async def run_search_workflow(
     after_dedup = len(all_jobs)
 
     scored_jobs = await score_jobs_with_ai(all_jobs, skills)
-    filtered_jobs = [job for job in scored_jobs if (
-        job.match_score or 0) >= min_score]
+    matched_jobs = [job for job in scored_jobs if (job.match_score or 0) >= min_score]
+    returned_jobs = matched_jobs if filter_by_score else scored_jobs
 
     for source_diag in diagnostics_by_source:
         platform = source_diag["platform"]
         source_diag["after_score_filter"] = sum(
-            1 for job in filtered_jobs if job.source_platform == platform
-        )
+        1 for job in matched_jobs if job.source_platform == platform
+    )
 
     diagnostics: dict[str, Any] = {
         "sources": diagnostics_by_source,
         "before_dedup": before_dedup,
         "after_dedup": after_dedup,
-        "after_score_filter": len(filtered_jobs),
+        "after_score_filter": len(matched_jobs),
+        "score_filter_enabled": filter_by_score,
+        "returned_results": len(returned_jobs),
     }
 
-    return filtered_jobs, diagnostics
+    return returned_jobs, diagnostics
+
