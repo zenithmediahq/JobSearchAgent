@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import streamlit as st
+from db import init_db
 
 from utils.session_state import init_session_state
 from utils.export import build_fallback_job_link, jobs_to_csv
@@ -23,6 +24,7 @@ from ui.sidebar import render_sidebar
 st.set_page_config(page_title="AI Jobb-Agent", page_icon="💼", layout="wide")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+init_db()
 
 # -------------------------
 # SESSION STATE RENDER
