@@ -4,3 +4,4 @@ openai
 pydantic
 pymupdf
 python-docx
+sqlmodel
