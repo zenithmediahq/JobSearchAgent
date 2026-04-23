@@ -73,6 +73,21 @@ def render_feedback(
     st.metric("Total intervjuscore", f"{overall_score}/100")
     st.info(overall_summary)
 
+    report_text = build_interview_feedback_report(
+        questions,
+        feedback_items,
+        overall_score,
+        overall_summary,
+    )
+
+    st.download_button(
+        label="Ladda ner intervjufeedback (.txt)",
+        data=report_text,
+        file_name="interview_feedback_report.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
+
     for index, question in enumerate(questions, start=1):
         feedback = find_feedback_for_question(question.id, feedback_items)
 
@@ -99,6 +114,63 @@ def render_feedback(
 
             st.write("**Förbättrat svar**")
             st.write(feedback.improved_answer)
+
+
+def build_interview_feedback_report(
+    questions: list[InterviewQuestion],
+    feedback_items: list[InterviewAnswerFeedback],
+    overall_score: int,
+    overall_summary: str,
+) -> str:
+    lines = [
+        "Intervjuövning Rapport",
+        "",
+        f"Total intervjuscore: {overall_score}/100",
+        "",
+        "Sammanfattning",
+        overall_summary,
+        "",
+    ]
+
+    for index, question in enumerate(questions, start=1):
+        feedback = find_feedback_for_question(question.id, feedback_items)
+
+        lines.extend([
+            f"Fråga {index}",
+            f"Kategori: {question.category}",
+            f"Fråga: {question.question}",
+        ])
+
+        if question.what_good_answers_include:
+            lines.append("Bra svar bör innehålla:")
+            lines.extend(
+                f"- {item}" for item in question.what_good_answers_include)
+
+        if feedback is None:
+            lines.extend([
+                "Ingen feedback returnerades för denna fråga.",
+                "",
+            ])
+            continue
+
+        lines.extend([
+            f"Poäng: {feedback.score}/100",
+            "Styrkor",
+        ])
+        lines.extend(f"- {item}" for item in feedback.strengths)
+
+        lines.extend([
+            "Svagheter",
+        ])
+        lines.extend(f"- {item}" for item in feedback.weaknesses)
+
+        lines.extend([
+            "Förbättrat svar",
+            feedback.improved_answer,
+            "",
+        ])
+
+    return "\n".join(lines)
 
 
 def render_interview_tab(final_cv_text: str) -> None:
