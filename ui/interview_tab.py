@@ -155,22 +155,29 @@ def render_interview_tab(final_cv_text: str) -> None:
         answers = render_question_list(question_set.questions)
 
         if st.button("Utvärdera svar", use_container_width=True):
-            with st.spinner("Bedömer dina svar..."):
-                feedback_set = asyncio.run(
-                    score_interview_answers(
-                        final_cv_text,
-                        target_job,
-                        question_set.questions,
-                        answers,
-                    )
-                )
+            non_empty_answers = [answer.strip()
+                                 for answer in answers if answer.strip()]
 
-                if feedback_set:
-                    st.session_state.interview_feedback_set = feedback_set
-                else:
-                    st.error(
-                        "Kunde inte utvärdera svaren just nu. Om du nyligen gjort flera AI-körningar kan Gemini-kvoten vara slut."
+            if not non_empty_answers:
+                st.warning(
+                    "Skriv minst ett svar innan du utvärderar intervjun.")
+            else:
+                with st.spinner("Bedömer dina svar..."):
+                    feedback_set = asyncio.run(
+                        score_interview_answers(
+                            final_cv_text,
+                            target_job,
+                            question_set.questions,
+                            answers,
+                        )
                     )
+
+                    if feedback_set:
+                        st.session_state.interview_feedback_set = feedback_set
+                    else:
+                        st.error(
+                            "Kunde inte utvärdera svaren just nu. Om du nyligen gjort flera AI-körningar kan Gemini-kvoten vara slut."
+                        )
 
     feedback_set = st.session_state.interview_feedback_set
 
