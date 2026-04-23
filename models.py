@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from sqlmodel import Field, SQLModel
 
 
 class JobListing(BaseModel):
@@ -125,3 +126,24 @@ class InterviewFeedbackSet(BaseModel):
     overall_score: int
     overall_summary: str
     feedback: list[InterviewAnswerFeedback]
+
+
+class SavedJobRecord(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    job_key: str = Field(index=True, unique=True)
+
+    title: str
+    company: str
+    location: str
+    description: str
+
+    work_mode: str | None = None
+    employment_type: str | None = None
+    application_url: str | None = None
+    source_platform: str | None = None
+
+    match_score: int | None = None
+    status: str = "Ej ansökt"
+
+    short_motivation: str | None = None
+    cover_letter: str | None = None
