@@ -173,6 +173,17 @@ def build_interview_feedback_report(
     return "\n".join(lines)
 
 
+def reset_interview_answer_fields() -> None:
+    keys_to_delete = [
+        key
+        for key in st.session_state.keys()
+        if isinstance(key, str) and key.startswith("interview_answer_")
+    ]
+
+    for key in keys_to_delete:
+        del st.session_state[key]
+
+
 def render_interview_tab(final_cv_text: str) -> None:
     st.subheader("Intervju")
     st.caption(
@@ -195,6 +206,7 @@ def render_interview_tab(final_cv_text: str) -> None:
         final_cv_text != st.session_state.last_interview_cv_text
         or current_job_key != st.session_state.last_interview_job_key
     ):
+        reset_interview_answer_fields()
         st.session_state.interview_question_set = None
         st.session_state.interview_feedback_set = None
 
@@ -205,6 +217,7 @@ def render_interview_tab(final_cv_text: str) -> None:
             )
 
             if question_set:
+                reset_interview_answer_fields()
                 st.session_state.interview_question_set = question_set
                 st.session_state.interview_feedback_set = None
                 st.session_state.last_interview_cv_text = final_cv_text
