@@ -61,6 +61,7 @@ class BulletRewriteSuggestion(BaseModel):
     suggestion: str
     reason: str
 
+
 class ResumeScanResult(BaseModel):
     overall_score: int
     summary: str
@@ -72,6 +73,7 @@ class ResumeScanResult(BaseModel):
     keyword_gaps: list[KeywordGap]
     bullet_suggestions: list[BulletRewriteSuggestion]
     recommended_keywords: list[str]
+
 
 class TailoredResumeBullet(BaseModel):
     original: str | None = None
@@ -96,3 +98,30 @@ class TailoredResumeResult(BaseModel):
     keywords_to_add: list[str]
     missing_but_not_invented: list[str]
     recruiter_notes: list[str]
+
+
+class InterviewQuestion(BaseModel):
+    id: str
+    category: str
+    question: str
+    what_good_answers_include: list[str]
+
+
+class InterviewQuestionSet(BaseModel):
+    target_role: str
+    target_company: str
+    questions: list[InterviewQuestion]
+
+
+class InterviewAnswerFeedback(BaseModel):
+    question_id: str
+    score: int
+    strengths: list[str]
+    weaknesses: list[str]
+    improved_answer: str
+
+
+class InterviewFeedbackSet(BaseModel):
+    overall_score: int
+    overall_summary: str
+    feedback: list[InterviewAnswerFeedback]
