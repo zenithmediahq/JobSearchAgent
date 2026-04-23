@@ -14,6 +14,12 @@ DEFAULT_SESSION_VALUES = {
     "last_tailored_cv_text": "",
     "last_tailored_job_key": "",
 
+    "interview_question_set": None,
+    "interview_feedback_set": None,
+    "last_interview_cv_text": "",
+    "last_interview_job_key": "",
+
+
     "cv_text": "",
     "search_diagnostics": {},
     "resume_scan_result": None,
