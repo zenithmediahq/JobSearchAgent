@@ -12,7 +12,7 @@ from models import (
 from services.ai_client import get_ai_client
 
 AI_MODEL = "gemini-2.5-flash"
-logger = logging.getLogger(_name_)
+logger = logging.getLogger(__name__)
 
 
 def build_interview_question_prompt(cv_text: str, target_job: JobListing) -> str:
