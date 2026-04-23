@@ -8,11 +8,12 @@ from models import JobListing
 from services.cv_parser import extract_text_from_upload
 from services.job_fetcher import run_search_workflow
 from ui.scanner_tab import render_scanner_tab
+from ui.tailored_resume_tab import render_tailored_resume_tab
+from ui.interview_tab import render_interview_tab
 from ui.results_tab import render_results_tab
 from ui.saved_jobs_tab import render_saved_jobs_tab
 from ui.profile_input import render_profile_input
 from ui.sidebar import render_sidebar
-from ui.tailored_resume_tab import render_tailored_resume_tab
 
 
 # -------------------------
@@ -87,6 +88,11 @@ if final_cv_text != st.session_state.last_tailored_cv_text:
     st.session_state.tailored_resume_result = None
     st.session_state.last_tailored_job_key = ""
 
+if final_cv_text != st.session_state.last_interview_cv_text:
+    st.session_state.interview_question_set = None
+    st.session_state.interview_feedback_set = None
+    st.session_state.last_interview_job_key = ""
+
 
 search_col1, search_col2 = st.columns([2, 1])
 
@@ -137,8 +143,8 @@ if start_search:
             except Exception as e:
                 st.error(f"Ett fel uppstod: {e}")
 
-tab_results, tab_saved, tab_scanner, tab_builder = st.tabs(
-    ["Resultat", "Sparade jobb", "CV Scanner", "CV Builder"]
+tab_results, tab_saved, tab_scanner, tab_builder, tab_interview = st.tabs(
+    ["Resultat", "Sparade jobb", "CV Scanner", "CV Builder", "Intervju"]
 
 )
 
@@ -153,3 +159,6 @@ with tab_scanner:
 
 with tab_builder:
     render_tailored_resume_tab(final_cv_text)
+
+with tab_interview:
+    render_interview_tab(final_cv_text)
