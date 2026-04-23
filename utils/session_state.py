@@ -1,4 +1,5 @@
 import streamlit as st
+from services.storage import load_saved_jobs
 
 
 DEFAULT_SESSION_VALUES = {
@@ -30,3 +31,6 @@ def init_session_state() -> None:
     for key, value in DEFAULT_SESSION_VALUES.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+    if not st.session_state.saved_jobs:
+        st.session_state.saved_jobs = load_saved_jobs()
