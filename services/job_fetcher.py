@@ -62,12 +62,18 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
                 {
                     "role": "system",
                     "content": (
-                        "Extrahera alla jobbannonser. Identifiera titel, företag, plats, länk, "
-                        "arbetsform (distans/hybrid/på plats), anställningstyp (heltid/deltid) "
-                        "och beskrivning."
+                        "Extrahera jobb från sidan. "
+                        "Sidan kan vara antingen en sökresultatsida med flera jobbkort eller en enskild jobbannons. "
+                        "Om det är en lista med jobb, extrahera varje synligt jobb så gott det går även om vissa fält saknas. "
+                        "Om information saknas, använd tom sträng istället för att hitta på fakta. "
+                        "Identifiera titel, företag, plats, länk, arbetsform, anställningstyp och en kort beskrivning när det finns. "
+                        "Returnera alla synliga jobb som strukturerad data."
                     ),
                 },
-                {"role": "user", "content": f"URL: {url}\n\nInnehåll:\n{markdown}"},
+                {
+                    "role": "user",
+                    "content": f"URL: {url}\n\nInnehåll:\n{markdown}",
+                },
             ],
             response_format=JobListings,
         )
@@ -79,8 +85,9 @@ async def extract_jobs_with_ai(markdown: str, url: str) -> list[JobListing]:
             return []
 
         return parsed.jobs
+
     except Exception as e:
-        logger.error(f"AI Extraktionsfel: {e}")
+        logger.error(f"AI Extraktionsfel för {url}: {e}")
         return []
 
 
