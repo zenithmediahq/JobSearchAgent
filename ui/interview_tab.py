@@ -9,6 +9,12 @@ from services.interview_practice import (
 )
 from utils.job_state import get_job_key
 
+from services.storage import (
+    build_interview_session_key,
+    load_interview_session,
+    upsert_interview_session,
+)
+
 
 def select_interview_target_job(saved_jobs: list[JobListing]) -> JobListing | None:
     if not saved_jobs:
@@ -202,6 +208,8 @@ def render_interview_tab(final_cv_text: str) -> None:
 
     current_job_key = get_job_key(target_job)
 
+    session_key = build_interview_session_key(final_cv_text, current_job_key)
+
     if (
         final_cv_text != st.session_state.last_interview_cv_text
         or current_job_key != st.session_state.last_interview_job_key
@@ -209,6 +217,16 @@ def render_interview_tab(final_cv_text: str) -> None:
         reset_interview_answer_fields()
         st.session_state.interview_question_set = None
         st.session_state.interview_feedback_set = None
+
+        if st.session_state.interview_question_set is None:
+            stored_question_set, stored_feedback_set = load_interview_session(
+                session_key)
+
+        if stored_question_set:
+            st.session_state.interview_question_set = stored_question_set
+            st.session_state.interview_feedback_set = stored_feedback_set
+            st.session_state.last_interview_cv_text = final_cv_text
+            st.session_state.last_interview_job_key = current_job_key
 
     if st.button("Generera intervjufrågor", type="primary", use_container_width=True):
         with st.spinner("Genererar intervjufrågor..."):
@@ -222,6 +240,13 @@ def render_interview_tab(final_cv_text: str) -> None:
                 st.session_state.interview_feedback_set = None
                 st.session_state.last_interview_cv_text = final_cv_text
                 st.session_state.last_interview_job_key = current_job_key
+                upsert_interview_session(
+                    session_key=session_key,
+                    job_key=current_job_key,
+                    question_set=question_set,
+                    feedback_set=None,
+                )
+
             else:
                 st.error(
                     "Kunde inte generera intervjufrågor just nu. Om du nyligen gjort flera AI-körningar kan Gemini-kvoten vara slut."
@@ -259,6 +284,13 @@ def render_interview_tab(final_cv_text: str) -> None:
 
                     if feedback_set:
                         st.session_state.interview_feedback_set = feedback_set
+                        upsert_interview_session(
+                            session_key=session_key,
+                            job_key=current_job_key,
+                            question_set=question_set,
+                            feedback_set=feedback_set,
+                        )
+
                     else:
                         st.error(
                             "Kunde inte utvärdera svaren just nu. Om du nyligen gjort flera AI-körningar kan Gemini-kvoten vara slut."
