@@ -153,3 +153,20 @@ class SavedJobRecord(SQLModel, table=True):
         default=None,
         sa_column=Column(JSON),
     )
+
+
+class InterviewSessionRecord(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    session_key: str = Field(index=True, unique=True)
+
+    job_key: str = Field(index=True)
+    target_role: str
+    target_company: str
+
+    questions_json: dict = Field(
+        sa_column=Column(JSON),
+    )
+    feedback_json: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON),
+    )
