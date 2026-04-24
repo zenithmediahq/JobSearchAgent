@@ -1,5 +1,5 @@
 from sqlmodel import select
-
+import hashlib
 from db import get_session
 from models import (
     InterviewFeedbackSet,
@@ -99,8 +99,8 @@ def delete_saved_job(job_key: str) -> None:
 
 
 def build_interview_session_key(cv_text: str, job_key: str) -> str:
-    cv_key = str(abs(hash(cv_text[:4000])))
-    return f"{job_key}|{cv_key}"
+    cv_digest = hashlib.sha256(cv_text[:4000].encode("utf-8")).hexdigest()
+    return f"{job_key}|{cv_digest}"
 
 
 def load_interview_session(
