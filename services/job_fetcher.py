@@ -241,6 +241,50 @@ def build_source_configs(
     return sources
 
 
+def is_probable_job_posting(title: str, url: str, content: str) -> bool:
+    normalized_title = (title or "").lower()
+    normalized_url = (url or "").lower()
+    normalized_content = (content or "").lower()
+
+    blocked_title_fragments = [
+        "lediga jobb för",
+        "jobb som",
+        "jobs in",
+        "jobs for",
+        "lön i",
+        "salary",
+        "matchar",
+    ]
+
+    blocked_url_fragments = [
+        "/jobs?",
+        "/jobs/search",
+        "/q-",
+        "salary",
+    ]
+
+    if any(fragment in normalized_title for fragment in blocked_title_fragments):
+        return False
+
+    if any(fragment in normalized_url for fragment in blocked_url_fragments):
+        return False
+
+    # Keep pages that look like a specific role/company posting.
+    positive_signals = [
+        " söker ",
+        "hiring",
+        "jobb",
+        "job",
+        "support",
+        "specialist",
+        "tekniker",
+        "servicedesk",
+        "helpdesk",
+    ]
+
+    return any(signal in normalized_title or signal in normalized_content for signal in positive_signals)
+
+
 async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], dict[str, Any]]:
     platform = source["platform"]
     url = source["url"]
@@ -280,6 +324,9 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
         result_content = result.get("content", "")
 
         if not result_url and not result_name and not result_content:
+            continue
+
+        if not is_probable_job_posting(result_name, result_url, result_content):
             continue
 
         jobs.append(
