@@ -1,7 +1,13 @@
 from sqlmodel import select
 
 from db import get_session
-from models import JobListing, SavedJobRecord
+from models import (
+    InterviewFeedbackSet,
+    InterviewQuestionSet,
+    InterviewSessionRecord,
+    JobListing,
+    SavedJobRecord,
+)
 
 
 def job_to_record(job: JobListing) -> SavedJobRecord:
@@ -90,3 +96,70 @@ def delete_saved_job(job_key: str) -> None:
         if existing:
             session.delete(existing)
             session.commit()
+
+
+def build_interview_session_key(cv_text: str, job_key: str) -> str:
+    cv_key = str(abs(hash(cv_text[:4000])))
+    return f"{job_key}|{cv_key}"
+
+
+def load_interview_session(
+    session_key: str,
+) -> tuple[InterviewQuestionSet | None, InterviewFeedbackSet | None]:
+    with get_session() as session:
+        record = session.exec(
+            select(InterviewSessionRecord).where(
+                InterviewSessionRecord.session_key == session_key
+            )
+        ).first()
+
+        if not record:
+            return None, None
+
+        question_set = InterviewQuestionSet.model_validate(
+            record.questions_json)
+        feedback_set = (
+            InterviewFeedbackSet.model_validate(record.feedback_json)
+            if record.feedback_json
+            else None
+        )
+
+        return question_set, feedback_set
+
+
+def upsert_interview_session(
+    session_key: str,
+    job_key: str,
+    question_set: InterviewQuestionSet,
+    feedback_set: InterviewFeedbackSet | None = None,
+) -> None:
+    with get_session() as session:
+        existing = session.exec(
+            select(InterviewSessionRecord).where(
+                InterviewSessionRecord.session_key == session_key
+            )
+        ).first()
+
+        question_payload = question_set.model_dump()
+        feedback_payload = feedback_set.model_dump() if feedback_set else None
+
+        if existing:
+            existing.job_key = job_key
+            existing.target_role = question_set.target_role
+            existing.target_company = question_set.target_company
+            existing.questions_json = question_payload
+            existing.feedback_json = feedback_payload
+            session.add(existing)
+        else:
+            session.add(
+                InterviewSessionRecord(
+                    session_key=session_key,
+                    job_key=job_key,
+                    target_role=question_set.target_role,
+                    target_company=question_set.target_company,
+                    questions_json=question_payload,
+                    feedback_json=feedback_payload,
+                )
+            )
+
+        session.commit()
