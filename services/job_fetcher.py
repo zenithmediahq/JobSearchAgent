@@ -2,6 +2,7 @@ import asyncio
 import logging
 import httpx
 import urllib.parse
+from collections.abc import Callable
 
 from typing import Any
 from models import JobListing, JobListings
@@ -13,6 +14,7 @@ AI_MODEL = "gemini-2.5-flash"
 MAX_CONTENT_CHARS = 50000
 SOURCE_EXTRACTION_CACHE: dict[str,
                               tuple[list[JobListing], dict[str, Any]]] = {}
+SourceConfig = dict[str, str]
 
 logger = logging.getLogger(__name__)
 
@@ -126,20 +128,16 @@ async def fetch_and_extract_source(source: dict[str, str]) -> tuple[list[JobList
     return extracted, diagnostics
 
 
-async def run_search_workflow(
+def build_source_configs(
     query: str,
     location: str,
-    skills: str,
-    min_score: int,
-    selected_sources: list[str] | None = None,
-    filter_by_score: bool = True,
-    pages_per_source: int = 1,
-) -> tuple[list[JobListing], dict[str, Any]]:
+    pages_per_source: int,
+) -> list[SourceConfig]:
     q_enc = urllib.parse.quote(query)
     l_enc = urllib.parse.quote(location)
     pages_per_source = max(1, min(pages_per_source, 3))
 
-    sources: list[dict[str, str]] = []
+    sources: list[SourceConfig] = []
 
     for page in range(1, pages_per_source + 1):
         sources.append(
@@ -152,20 +150,64 @@ async def run_search_workflow(
             }
         )
 
-    sources.extend([
-        {
-            "url": f"https://se.indeed.com/jobs?q={q_enc}&l={l_enc}",
-            "platform": "Indeed",
-        },
-        {
-            "url": f"https://www.linkedin.com/jobs/search?keywords={q_enc}&location={l_enc}",
-            "platform": "LinkedIn",
-        },
-        {
-            "url": f"https://jobbsafari.se/jobb?q={q_enc}&l={l_enc}",
-            "platform": "JobbSafari",
-        },
-    ])
+    sources.extend(
+        [
+            {
+                "url": f"https://se.indeed.com/jobs?q={q_enc}&l={l_enc}",
+                "platform": "Indeed",
+            },
+            {
+                "url": f"https://www.linkedin.com/jobs/search?keywords={q_enc}&location={l_enc}",
+                "platform": "LinkedIn",
+            },
+            {
+                "url": f"https://jobbsafari.se/jobb?q={q_enc}&l={l_enc}",
+                "platform": "JobbSafari",
+            },
+        ]
+    )
+
+    return sources
+
+
+async def fetch_source_jobs(source: SourceConfig) -> tuple[list[JobListing], dict[str, Any]]:
+    platform = source["platform"]
+
+    if platform == "Platsbanken":
+        return await fetch_and_extract_source(source)
+
+    if platform == "Indeed":
+        return await fetch_and_extract_source(source)
+
+    if platform == "LinkedIn":
+        return await fetch_and_extract_source(source)
+
+    if platform == "JobbSafari":
+        return await fetch_and_extract_source(source)
+
+    diagnostics: dict[str, Any] = {
+        "platform": platform,
+        "url": source["url"],
+        "fetched": False,
+        "markdown_chars": 0,
+        "jobs_extracted": 0,
+        "after_score_filter": 0,
+        "cached": False,
+        "fetch_error": "Unsupported source",
+    }
+    return [], diagnostics
+
+
+async def run_search_workflow(
+    query: str,
+    location: str,
+    skills: str,
+    min_score: int,
+    selected_sources: list[str] | None = None,
+    filter_by_score: bool = True,
+    pages_per_source: int = 1,
+) -> tuple[list[JobListing], dict[str, Any]]:
+    sources = build_source_configs(query, location, pages_per_source)
 
     if selected_sources is not None:
         selected_source_names = set(selected_sources)
@@ -186,7 +228,7 @@ async def run_search_workflow(
         return [], diagnostics
 
     results = await asyncio.gather(
-        *(fetch_and_extract_source(source) for source in sources)
+        *(fetch_source_jobs(source) for source in sources)
     )
 
     diagnostics_by_source: list[dict[str, Any]] = []
