@@ -210,7 +210,10 @@ def build_source_configs(
                     f"?q={q_enc}%20{l_enc}&page={page}"
                 ),
                 "platform": "Platsbanken",
+                "query": query,
+                "location": location,
             }
+
         )
 
     sources.extend(
@@ -253,13 +256,13 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
         "LinkedIn": ["linkedin.com"],
     }
 
-    query_map = {
-        "Indeed": f"site:indeed.com jobs {url}",
-        "LinkedIn": f"site:linkedin.com/jobs {url}",
+    search_query_map = {
+        "Indeed": f"{source['query']} {source['location']} site:se.indeed.com/jobs",
+        "LinkedIn": f"{source['query']} {source['location']} site:linkedin.com/jobs",
     }
 
     search_results = await search_web(
-        query=query_map.get(platform, url),
+        query=search_query_map.get(platform, url),
         include_domains=domain_map.get(platform),
         max_results=10,
     )
