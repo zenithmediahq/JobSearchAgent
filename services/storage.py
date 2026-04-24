@@ -19,6 +19,7 @@ def job_to_record(job: JobListing) -> SavedJobRecord:
         status=job.status,
         short_motivation=job.short_motivation,
         cover_letter=job.cover_letter,
+        cv_tailoring_tips=job.cv_tailoring_tips,
     )
 
 
@@ -36,6 +37,7 @@ def record_to_job(record: SavedJobRecord) -> JobListing:
         status=record.status,
         short_motivation=record.short_motivation,
         cover_letter=record.cover_letter,
+        cv_tailoring_tips=record.cv_tailoring_tips,
     )
 
 
@@ -71,6 +73,7 @@ def upsert_saved_job(job: JobListing) -> None:
             existing.status = record.status
             existing.short_motivation = record.short_motivation
             existing.cover_letter = record.cover_letter
+            existing.cv_tailoring_tips = record.cv_tailoring_tips
             session.add(existing)
         else:
             session.add(record)
