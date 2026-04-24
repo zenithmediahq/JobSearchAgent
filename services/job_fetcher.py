@@ -233,6 +233,68 @@ def build_source_configs(
     return sources
 
 
+async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], dict[str, Any]]:
+    platform = source["platform"]
+    url = source["url"]
+
+    diagnostics: dict[str, Any] = {
+        "platform": platform,
+        "url": url,
+        "fetched": False,
+        "markdown_chars": 0,
+        "jobs_extracted": 0,
+        "after_score_filter": 0,
+        "cached": False,
+        "fetch_error": None,
+    }
+
+    domain_map = {
+        "Indeed": ["indeed.com", "se.indeed.com"],
+        "LinkedIn": ["linkedin.com"],
+    }
+
+    query_map = {
+        "Indeed": f"site:indeed.com jobs {url}",
+        "LinkedIn": f"site:linkedin.com/jobs {url}",
+    }
+
+    search_results = await search_web(
+        query=query_map.get(platform, url),
+        include_domains=domain_map.get(platform),
+        max_results=10,
+    )
+
+    jobs: list[JobListing] = []
+
+    for result in search_results:
+        result_url = result.get("url", "")
+        result_name = result.get("name", "")
+        result_content = result.get("content", "")
+
+        if not result_url and not result_name and not result_content:
+            continue
+
+        jobs.append(
+            JobListing(
+                title=result_name or "Okänd titel",
+                company="Okänt företag",
+                location="Ej angivet",
+                description=result_content or "Ingen beskrivning tillgänglig.",
+                application_url=result_url or None,
+                source_platform=platform,
+            )
+        )
+
+    diagnostics["fetched"] = bool(search_results)
+    diagnostics["jobs_extracted"] = len(jobs)
+
+    if not jobs:
+        diagnostics[
+            "fetch_error"] = f"No jobs returned from Linkup search fallback for {platform}"
+
+    return jobs, diagnostics
+
+
 async def fetch_source_jobs(source: SourceConfig) -> tuple[list[JobListing], dict[str, Any]]:
     platform = source["platform"]
 
@@ -240,10 +302,16 @@ async def fetch_source_jobs(source: SourceConfig) -> tuple[list[JobListing], dic
         return await fetch_and_extract_source(source)
 
     if platform == "Indeed":
-        return await fetch_and_extract_source(source)
+        jobs, diagnostics = await fetch_and_extract_source(source)
+        if jobs:
+            return jobs, diagnostics
+        return await search_source_jobs(source)
 
     if platform == "LinkedIn":
-        return await fetch_and_extract_source(source)
+        jobs, diagnostics = await fetch_and_extract_source(source)
+        if jobs:
+            return jobs, diagnostics
+        return await search_source_jobs(source)
 
     if platform == "JobbSafari":
         return await fetch_and_extract_source(source)
