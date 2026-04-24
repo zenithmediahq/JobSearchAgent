@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel
+from sqlalchemy import Column
+from sqlalchemy.types import JSON
 
 
 class JobListing(BaseModel):
@@ -147,3 +149,7 @@ class SavedJobRecord(SQLModel, table=True):
 
     short_motivation: str | None = None
     cover_letter: str | None = None
+    cv_tailoring_tips: list[str] | None = Field(
+        default=None,
+        sa_column=Column(JSON),
+    )

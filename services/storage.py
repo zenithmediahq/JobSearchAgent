@@ -16,7 +16,7 @@ def job_to_record(job: JobListing) -> SavedJobRecord:
         application_url=job.application_url,
         source_platform=job.source_platform,
         match_score=job.match_score,
-        status=job.status
+        status=job.status,
         short_motivation=job.short_motivation,
         cover_letter=job.cover_letter,
     )
