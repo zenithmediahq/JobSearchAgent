@@ -19,6 +19,22 @@ SourceConfig = dict[str, str]
 logger = logging.getLogger(__name__)
 
 
+def classify_fetch_error(platform: str, error_message: str | None) -> str | None:
+    if not error_message:
+        return None
+
+    normalized = error_message.lower()
+
+    if "http 400" in normalized and "fetch_error" in normalized:
+        if platform == "Indeed":
+            return "Indeed blocked or unsupported by fetch provider"
+        if platform == "LinkedIn":
+            return "LinkedIn blocked or unsupported by fetch provider"
+        return "Source blocked or unsupported by fetch provider"
+
+    return error_message
+
+
 async def fetch_webpage(url: str) -> tuple[str, str | None]:
     headers = {
         "Authorization": f"Bearer {get_api_key('LINKUP_API_KEY')}",
@@ -114,7 +130,11 @@ async def fetch_and_extract_source(source: dict[str, str]) -> tuple[list[JobList
     }
 
     md, fetch_error = await fetch_webpage(source["url"])
-    diagnostics["fetch_error"] = fetch_error
+    diagnostics["fetch_error"] = classify_fetch_error(
+        source["platform"],
+        fetch_error,
+    )
+
     diagnostics["markdown_chars"] = len(md)
 
     if md.strip():
