@@ -213,7 +213,6 @@ def build_source_configs(
                 "query": query,
                 "location": location,
             }
-
         )
 
     sources.extend(
@@ -221,14 +220,20 @@ def build_source_configs(
             {
                 "url": f"https://se.indeed.com/jobs?q={q_enc}&l={l_enc}",
                 "platform": "Indeed",
+                "query": query,
+                "location": location,
             },
             {
                 "url": f"https://www.linkedin.com/jobs/search?keywords={q_enc}&location={l_enc}",
                 "platform": "LinkedIn",
+                "query": query,
+                "location": location,
             },
             {
                 "url": f"https://jobbsafari.se/jobb?q={q_enc}&l={l_enc}",
                 "platform": "JobbSafari",
+                "query": query,
+                "location": location,
             },
         ]
     )
