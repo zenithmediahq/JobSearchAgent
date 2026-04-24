@@ -10,6 +10,7 @@ from services.ai_client import get_api_key, get_ai_client
 from services.job_scoring import score_jobs_with_ai
 
 LINKUP_API_URL = "https://api.linkup.so/v1/fetch"
+LINKUP_SEARCH_API_URL = "https://api.linkup.so/v1/search"
 AI_MODEL = "gemini-2.5-flash"
 MAX_CONTENT_CHARS = 50000
 SOURCE_EXTRACTION_CACHE: dict[str,
@@ -33,6 +34,41 @@ def classify_fetch_error(platform: str, error_message: str | None) -> str | None
         return "Source blocked or unsupported by fetch provider"
 
     return error_message
+
+
+async def search_web(
+    query: str,
+    include_domains: list[str] | None = None,
+    max_results: int = 10,
+) -> list[dict[str, Any]]:
+    headers = {
+        "Authorization": f"Bearer {get_api_key('LINKUP_API_KEY')}",
+        "Content-Type": "application/json",
+    }
+    payload: dict[str, Any] = {
+        "q": query,
+        "depth": "standard",
+        "outputType": "searchResults",
+        "includeSources": False,
+        "includeImages": False,
+        "maxResults": max_results,
+    }
+
+    if include_domains:
+        payload["includeDomains"] = include_domains
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        try:
+            response = await client.post(
+                LINKUP_SEARCH_API_URL,
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json().get("results", [])
+        except Exception as exc:
+            logger.warning("Linkup search failed for %s: %s", query, exc)
+            return []
 
 
 async def fetch_webpage(url: str) -> tuple[str, str | None]:
