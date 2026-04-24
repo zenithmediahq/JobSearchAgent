@@ -1,13 +1,23 @@
 from openai import AsyncOpenAI
 import streamlit as st
+import os
+
 
 
 def get_api_key(secret_name: str) -> str:
     try:
-        return st.secrets[secret_name]
+        value = st.secrets[secret_name]
+        if value:
+            return value
     except Exception:
-        st.error(f"Saknar API-nyckel: {secret_name}")
-        st.stop()
+        pass
+
+    env_value = os.getenv(secret_name)
+    if env_value:
+        return env_value
+
+    st.error(f"Saknar API-nyckel: {secret_name}")
+    st.stop()
 
 
 def get_ai_client() -> AsyncOpenAI:
