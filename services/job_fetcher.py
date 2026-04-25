@@ -384,6 +384,25 @@ async def fetch_source_jobs(source: SourceConfig) -> tuple[list[JobListing], dic
     return [], diagnostics
 
 
+def normalize_job_title(title: str, location: str | None = None) -> str:
+    normalized = (title or "").lower().strip()
+
+    for char in [",", ".", "!", "?", ":", ";", "|", "-", "(", ")"]:
+        normalized = normalized.replace(char, " ")
+
+    normalized = " ".join(normalized.split())
+
+    if location:
+        normalized_location = (location or "").lower().strip()
+        for location_part in normalized_location.split(","):
+            location_part = location_part.strip()
+            if location_part:
+                normalized = normalized.replace(location_part, " ")
+
+    normalized = " ".join(normalized.split())
+    return normalized
+
+
 async def run_search_workflow(
     query: str,
     location: str,
@@ -430,7 +449,7 @@ async def run_search_workflow(
     seen_jobs: set[str] = set()
 
     for job in all_jobs_raw:
-        title_key = (job.title or "").lower().strip()
+        title_key = normalize_job_title(job.title or "", job.location)
         company_key = (job.company or "").lower().strip()
         location_key = (job.location or "").lower().strip()
         key = f"{title_key}|{company_key}|{location_key}"
