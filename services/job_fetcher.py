@@ -313,6 +313,9 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
         "LinkedIn": f'"{source["query"]}" "{source["location"]}" jobs site:linkedin.com/jobs',
     }
 
+    search_query = search_query_map.get(platform, url)
+    diagnostics["search_query"] = search_query
+
     search_results = await search_web(
         query=search_query,
         include_domains=domain_map.get(platform),
