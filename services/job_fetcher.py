@@ -432,7 +432,8 @@ async def run_search_workflow(
     for job in all_jobs_raw:
         title_key = (job.title or "").lower().strip()
         company_key = (job.company or "").lower().strip()
-        key = f"{title_key}|{company_key}"
+        location_key = (job.location or "").lower().strip()
+        key = f"{title_key}|{company_key}|{location_key}"
 
         if key not in seen_jobs:
             seen_jobs.add(key)
