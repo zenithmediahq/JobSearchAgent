@@ -299,6 +299,8 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
         "after_score_filter": 0,
         "cached": False,
         "fetch_error": None,
+        "search_results_found": 0,
+        "search_query": None,
     }
 
     domain_map = {
@@ -312,10 +314,12 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
     }
 
     search_results = await search_web(
-        query=search_query_map.get(platform, url),
+        query=search_query,
         include_domains=domain_map.get(platform),
         max_results=10,
     )
+
+    diagnostics["search_results_found"] = len(search_results)
 
     jobs: list[JobListing] = []
 
