@@ -91,6 +91,13 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int) -> 
 
             st.write(f"Markdown-tecken: {source.get('markdown_chars', 0)}")
 
+            if source.get("search_query"):
+                st.caption(f"Sökfråga fallback: {source.get('search_query')}")
+
+            if source.get("search_results_found") is not None:
+                st.write(f"Fallback sökresultat: {source.get('search_results_found', 0)}")
+
+
             if source.get("fetch_error"):
                 st.error(f"Fetch-fel: {source.get('fetch_error')}")
 
