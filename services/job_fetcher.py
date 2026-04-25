@@ -3,6 +3,7 @@ import logging
 import httpx
 import urllib.parse
 from collections.abc import Callable
+import unicodedata
 
 from typing import Any
 from models import JobListing, JobListings
@@ -384,23 +385,38 @@ async def fetch_source_jobs(source: SourceConfig) -> tuple[list[JobListing], dic
     return [], diagnostics
 
 
-def normalize_job_title(title: str, location: str | None = None) -> str:
-    normalized = (title or "").lower().strip()
+def normalize_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    normalized = normalized.encode("ascii", "ignore").decode("ascii")
+    normalized = normalized.lower().strip()
 
-    for char in [",", ".", "!", "?", ":", ";", "|", "-", "(", ")"]:
+    for char in [",", ".", "!", "?", ":", ";", "|", "-", "(", ")", "/"]:
         normalized = normalized.replace(char, " ")
 
     normalized = " ".join(normalized.split())
-
-    if location:
-        normalized_location = (location or "").lower().strip()
-        for location_part in normalized_location.split(","):
-            location_part = location_part.strip()
-            if location_part:
-                normalized = normalized.replace(location_part, " ")
-
-    normalized = " ".join(normalized.split())
     return normalized
+
+
+def normalize_job_title(title: str, location: str | None = None) -> str:
+    normalized_title = normalize_text(title)
+
+    if not location:
+        return normalized_title
+
+    normalized_location = normalize_text(location)
+    location_tokens = {
+        token
+        for token in normalized_location.split()
+        if len(token) > 2
+    }
+
+    filtered_tokens = [
+        token
+        for token in normalized_title.split()
+        if token not in location_tokens
+    ]
+
+    return " ".join(filtered_tokens)
 
 
 async def run_search_workflow(
