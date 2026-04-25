@@ -302,13 +302,13 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
     }
 
     domain_map = {
-        "Indeed": ["indeed.com", "se.indeed.com"],
+        "Indeed": ["se.indeed.com"],
         "LinkedIn": ["linkedin.com"],
     }
 
     search_query_map = {
-        "Indeed": f"{source['query']} {source['location']} site:se.indeed.com/jobs",
-        "LinkedIn": f"{source['query']} {source['location']} site:linkedin.com/jobs",
+        "Indeed": f'"{source["query"]}" "{source["location"]}" jobb site:se.indeed.com',
+        "LinkedIn": f'"{source["query"]}" "{source["location"]}" jobs site:linkedin.com/jobs',
     }
 
     search_results = await search_web(
