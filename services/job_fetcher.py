@@ -295,6 +295,34 @@ def is_probable_job_posting(title: str, url: str, content: str) -> bool:
     return any(signal in normalized_title or signal in normalized_content for signal in positive_signals)
 
 
+def matches_query(title: str, content: str, query: str) -> bool:
+    query_terms = [
+        term
+        for term in normalize_text(query).split()
+        if len(term) >= 2
+    ]
+
+    if not query_terms:
+        return True
+
+    haystack = normalize_text(f"{title} {content}")
+    haystack_terms = set(haystack.split())
+
+    return all(term in haystack_terms for term in query_terms)
+
+
+def is_supported_fallback_job_url(platform: str, url: str) -> bool:
+    normalized_url = (url or "").lower()
+
+    if platform == "Indeed":
+        return "se.indeed.com/viewjob" in normalized_url
+
+    if platform == "LinkedIn":
+        return "linkedin.com/jobs/view" in normalized_url
+
+    return False
+
+
 async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], dict[str, Any]]:
     platform = source["platform"]
     url = source["url"]
@@ -356,7 +384,11 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
             diagnostics["fallback_results_rejected"] += 1
             continue
 
-        if not is_probable_job_posting(result_name, result_url, result_content):
+        if not is_supported_fallback_job_url(platform, result_url):
+            diagnostics["fallback_results_rejected"] += 1
+            continue
+
+        if not matches_query(result_name, result_content, source["query"]):
             diagnostics["fallback_results_rejected"] += 1
             continue
 
