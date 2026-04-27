@@ -102,6 +102,16 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int) -> 
                 st.write(
                     f"Fallback bortfiltrerade: {source.get('fallback_results_rejected', 0)}")
 
+            samples = source.get("fallback_samples") or []
+            if samples:
+                with st.expander("Visa fallback-exempel"):
+                    for sample in samples:
+                        st.write(f"**{sample.get('title') or 'Ingen titel'}**")
+                        if sample.get("url"):
+                            st.caption(sample["url"])
+                        if sample.get("content"):
+                            st.caption(sample["content"])
+
             if source.get("fetch_error"):
                 st.error(f"Fetch-fel: {source.get('fetch_error')}")
 

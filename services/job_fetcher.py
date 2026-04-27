@@ -300,6 +300,7 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
         "search_results_found": 0,
         "search_query": None,
         "fallback_results_rejected": 0,
+        "fallback_samples": [],
     }
 
     domain_map = {
@@ -330,6 +331,15 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
         result_url = result.get("url", "")
         result_name = result.get("name", "")
         result_content = result.get("content", "")
+
+        if len(diagnostics["fallback_samples"]) < 5:
+            diagnostics["fallback_samples"].append(
+                {
+                    "title": result_name,
+                    "url": result_url,
+                    "content": result_content[:160],
+                }
+            )
 
         if not result_url and not result_name and not result_content:
             diagnostics["fallback_results_rejected"] += 1
