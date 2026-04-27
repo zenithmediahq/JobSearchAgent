@@ -258,9 +258,7 @@ def is_probable_job_posting(title: str, url: str, content: str) -> bool:
     ]
 
     blocked_url_fragments = [
-        "/jobs?",
         "/jobs/search",
-        "/q-",
         "salary",
     ]
 
@@ -301,6 +299,7 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
         "fetch_error": None,
         "search_results_found": 0,
         "search_query": None,
+        "fallback_results_rejected": 0,
     }
 
     domain_map = {
@@ -309,7 +308,8 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
     }
 
     search_query_map = {
-        "Indeed": f'"{source["query"]}" "{source["location"]}" jobb site:se.indeed.com',
+        "Indeed": f'"{source["query"]}" "{source["location"]}" site:se.indeed.com/jobs',
+
         "LinkedIn": f'"{source["query"]}" "{source["location"]}" jobs site:linkedin.com/jobs',
     }
 
@@ -332,9 +332,11 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
         result_content = result.get("content", "")
 
         if not result_url and not result_name and not result_content:
+            diagnostics["fallback_results_rejected"] += 1
             continue
 
         if not is_probable_job_posting(result_name, result_url, result_content):
+            diagnostics["fallback_results_rejected"] += 1
             continue
 
         jobs.append(

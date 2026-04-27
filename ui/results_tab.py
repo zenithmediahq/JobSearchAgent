@@ -95,8 +95,12 @@ def render_search_diagnostics(diagnostics: dict, visible_results_count: int) -> 
                 st.caption(f"Sökfråga fallback: {source.get('search_query')}")
 
             if source.get("search_results_found") is not None:
-                st.write(f"Fallback sökresultat: {source.get('search_results_found', 0)}")
+                st.write(
+                    f"Fallback sökresultat: {source.get('search_results_found', 0)}")
 
+            if source.get("fallback_results_rejected") is not None:
+                st.write(
+                    f"Fallback bortfiltrerade: {source.get('fallback_results_rejected', 0)}")
 
             if source.get("fetch_error"):
                 st.error(f"Fetch-fel: {source.get('fetch_error')}")
