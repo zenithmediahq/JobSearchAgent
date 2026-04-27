@@ -258,7 +258,9 @@ def is_probable_job_posting(title: str, url: str, content: str) -> bool:
     ]
 
     blocked_url_fragments = [
+        "/jobs?",
         "/jobs/search",
+        "/q-",
         "salary",
     ]
 
@@ -280,6 +282,15 @@ def is_probable_job_posting(title: str, url: str, content: str) -> bool:
         "servicedesk",
         "helpdesk",
     ]
+
+    positive_url_fragments = [
+        "viewjob",
+        "/rc/clk",
+        "/jobs/view",
+    ]
+
+    if any(fragment in normalized_url for fragment in positive_url_fragments):
+        return True
 
     return any(signal in normalized_title or signal in normalized_content for signal in positive_signals)
 
@@ -309,7 +320,7 @@ async def search_source_jobs(source: SourceConfig) -> tuple[list[JobListing], di
     }
 
     search_query_map = {
-        "Indeed": f'"{source["query"]}" "{source["location"]}" site:se.indeed.com/jobs',
+        "Indeed": f'"{source["query"]}" "{source["location"]}" site:se.indeed.com/viewjob',
 
         "LinkedIn": f'"{source["query"]}" "{source["location"]}" jobs site:linkedin.com/jobs',
     }
