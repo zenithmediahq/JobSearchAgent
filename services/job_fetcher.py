@@ -9,6 +9,7 @@ from typing import Any
 from models import JobListing, JobListings
 from services.ai_client import get_api_key, get_ai_client
 from services.job_scoring import score_jobs_with_ai
+from services.job_sources.platsbanken import search_platsbanken_jobs
 
 LINKUP_API_URL = "https://api.linkup.so/v1/fetch"
 LINKUP_SEARCH_API_URL = "https://api.linkup.so/v1/search"
@@ -213,7 +214,9 @@ def build_source_configs(
                 "platform": "Platsbanken",
                 "query": query,
                 "location": location,
+                "page": str(page),
             }
+
         )
 
     sources.extend(
@@ -417,7 +420,12 @@ async def fetch_source_jobs(source: SourceConfig) -> tuple[list[JobListing], dic
     platform = source["platform"]
 
     if platform == "Platsbanken":
-        return await fetch_and_extract_source(source)
+        page = int(source.get("page", "1"))
+        return await search_platsbanken_jobs(
+            query=source["query"],
+            location=source["location"],
+            page=page,
+        )
 
     if platform == "Indeed":
         jobs, diagnostics = await fetch_and_extract_source(source)
