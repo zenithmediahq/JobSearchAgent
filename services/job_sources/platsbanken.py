@@ -130,8 +130,9 @@ async def search_platsbanken_jobs(
     query: str,
     location: str,
     page: int = 1,
-    limit: int = 25,
+    limit: int = 100,
 ) -> tuple[list[JobListing], dict[str, Any]]:
+
     page = max(1, page)
     limit = max(1, min(limit, 100))
     offset = (page - 1) * limit
