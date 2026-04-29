@@ -107,8 +107,23 @@ def matches_search_query(job: JobListing, query: str) -> bool:
     if not query_terms:
         return True
 
-    haystack = normalize_text(f"{job.title} {job.description}")
-    return all(term in haystack for term in query_terms)
+    normalized_query = normalize_text(query)
+    title = normalize_text(job.title or "")
+    description = normalize_text(job.description or "")
+
+    if normalized_query in title:
+        return True
+
+    title_matches = sum(1 for term in query_terms if term in title)
+    description_matches = sum(1 for term in query_terms if term in description)
+
+    if title_matches >= 2:
+        return True
+
+    if title_matches >= 1 and description_matches >= 1:
+        return True
+
+    return description_matches >= len(query_terms)
 
 
 async def search_platsbanken_jobs(
