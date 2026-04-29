@@ -87,6 +87,38 @@ def normalize_text(value: str) -> str:
     return " ".join((value or "").lower().split())
 
 
+def build_search_queries(query: str) -> list[str]:
+    cleaned_query = query.strip()
+    normalized_query = normalize_text(cleaned_query)
+
+    queries = [cleaned_query]
+
+    if " " in cleaned_query:
+        queries.append(cleaned_query.replace(" ", "-"))
+
+    terms = [
+        term
+        for term in normalized_query.split()
+        if len(term) >= 3
+    ]
+
+    for term in terms:
+        queries.append(term)
+
+    unique_queries = []
+    seen = set()
+
+    for item in queries:
+        cleaned = item.strip()
+        key = normalize_text(cleaned)
+
+        if cleaned and key not in seen:
+            seen.add(key)
+            unique_queries.append(cleaned)
+
+    return unique_queries
+
+
 def matches_location(job: JobListing, location: str) -> bool:
     wanted_location = normalize_text(location)
 
@@ -123,7 +155,7 @@ def matches_search_query(job: JobListing, query: str) -> bool:
     if title_matches >= 1 and description_matches >= 1:
         return True
 
-    return description_matches >= len(query_terms)
+    return title_matches >= 1 or description_matches >= 1
 
 
 async def search_platsbanken_jobs(
@@ -132,18 +164,11 @@ async def search_platsbanken_jobs(
     page: int = 1,
     limit: int = 100,
 ) -> tuple[list[JobListing], dict[str, Any]]:
-
     page = max(1, page)
     limit = max(1, min(limit, 100))
     offset = (page - 1) * limit
 
-    search_query = query.strip()
-
-    params = {
-        "q": search_query,
-        "limit": limit,
-        "offset": offset,
-    }
+    search_queries = build_search_queries(query)
 
     diagnostics: dict[str, Any] = {
         "platform": "Platsbanken",
@@ -154,27 +179,39 @@ async def search_platsbanken_jobs(
         "after_score_filter": 0,
         "cached": False,
         "fetch_error": None,
-        "search_query": search_query,
+        "search_query": ", ".join(search_queries),
         "search_results_found": 0,
         "fallback_results_rejected": 0,
     }
 
     try:
+        all_hits: list[dict[str, Any]] = []
+
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(JOBTECH_SEARCH_URL, params=params)
-            response.raise_for_status()
+            for search_query in search_queries:
+                params = {
+                    "q": search_query,
+                    "limit": limit,
+                    "offset": offset,
+                }
 
-        data = response.json()
-        hits = data.get("hits", [])
+                response = await client.get(JOBTECH_SEARCH_URL, params=params)
+                response.raise_for_status()
 
-        if not isinstance(hits, list):
-            diagnostics["fetch_error"] = "Unexpected JobTech response: hits was not a list"
-            return [], diagnostics
+                data = response.json()
+                hits = data.get("hits", [])
+
+                if not isinstance(hits, list):
+                    diagnostics["fetch_error"] = (
+                        "Unexpected JobTech response: hits was not a list"
+                    )
+                    return [], diagnostics
+
+                all_hits.extend(hit for hit in hits if isinstance(hit, dict))
 
         jobs = [
             map_jobtech_hit_to_job_listing(hit)
-            for hit in hits
-            if isinstance(hit, dict)
+            for hit in all_hits
         ]
 
         jobs = [
@@ -185,8 +222,8 @@ async def search_platsbanken_jobs(
 
         diagnostics["fetched"] = True
         diagnostics["jobs_extracted"] = len(jobs)
-        diagnostics["search_results_found"] = len(hits)
-        diagnostics["fallback_results_rejected"] = len(hits) - len(jobs)
+        diagnostics["search_results_found"] = len(all_hits)
+        diagnostics["fallback_results_rejected"] = len(all_hits) - len(jobs)
 
         return jobs, diagnostics
 
