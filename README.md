@@ -1,230 +1,275 @@
-# AI Job Search Agent
+# JobSearchAgent
 
-An AI‑powered job search application built with **Streamlit** to find, analyze, save, and track job postings based on a candidate’s CV.
+JobSearchAgent is a Streamlit-based job search assistant for finding, evaluating, saving, and preparing job applications from a candidate CV.
 
-The app helps users:
+The project is inspired by commercial AI job-search tools, but the goal is to build an open, practical workflow that helps users:
 
-- search jobs across multiple job boards  
-- extract job postings using AI  
-- match jobs against an uploaded CV  
-- save interesting jobs  
-- track application status  
-- generate application packs (motivation, cover letter, CV tailoring tips)  
-- export results to CSV and application packs to TXT  
+- search for jobs by role and location
+- compare jobs against an uploaded CV
+- scan a CV for ATS risks
+- tailor CV content for selected jobs
+- generate application material
+- practice interview questions
+- save jobs and track application status
+
+The app is still evolving, but the current direction is to keep Streamlit as the UI while moving product logic into focused service modules.
 
 ---
 
-## Features
+## Current Features
 
-### Multi‑source job search
-The app retrieves jobs from:
+### Job Search
 
-- Arbetsförmedlingen Platsbanken  
-- Indeed  
-- LinkedIn  
-- JobbSafari  
+Users can search by job title/keyword and location. The current reliable source path is:
 
-### CV‑based matching
+- Platsbanken through the official JobTech JobSearch API
+
+The app also contains experimental fallback support for:
+
+- Indeed
+- LinkedIn
+- JobbSafari
+
+Those sources are less reliable because they often block scraping or return search/category pages instead of individual job ads.
+
+### CV Upload
+
+Users can provide their CV by:
+
+- uploading PDF, DOCX, or TXT files
+- pasting CV text manually
+
+The parsed CV text is used for job matching, resume scanning, tailoring, and interview preparation.
+
+### Job Matching
+
+Jobs are normalized into a shared `JobListing` model and scored against the CV.
+
+The app supports:
+
+- AI-based scoring with Gemini
+- fallback keyword scoring when AI scoring fails or quota is unavailable
+- match strengths
+- match gaps
+- short recommendations
+- minimum score filtering
+- remote/hybrid filtering
+- full-time filtering
+
+### ATS Resume Scanner
+
+The CV Scanner tab analyzes a CV for ATS-style issues and returns:
+
+- overall ATS score
+- summary
+- strengths
+- weaknesses
+- missing sections
+- ATS risks
+- section scores
+- keyword gaps
+- bullet rewrite suggestions
+- recommended keywords
+
+The scanner can run as a general CV review and also supports job-targeted scanning.
+
+### Tailored Resume Builder
+
+The CV Builder tab helps adapt existing CV content toward a selected job without inventing credentials.
+
+It focuses on:
+
+- role targeting
+- safer rewrites
+- keyword alignment
+- concrete improvement suggestions
+
+### Interview Practice
+
+The Intervju tab supports mock interview preparation based on the CV and selected job context.
+
+The project includes interview models and service logic for structured interview sessions.
+
+### Saved Jobs and Application Workflow
+
 Users can:
 
-- upload a CV as **PDF, DOCX, or TXT**  
-- paste CV text manually  
+- save jobs
+- remove saved jobs
+- update status
+- generate application packs
+- export search results and saved jobs as CSV
+- download application pack text
 
-The AI compares each job with the CV and provides:
+Saved job and interview persistence has started moving toward SQLite-backed storage.
 
-- **match score**  
-- **strengths**  
-- **gaps**  
-- **recommendation**  
+### Search Diagnostics
 
-### Smart filters
-Filtering options include:
+Each search includes diagnostics so source reliability is visible:
 
-- minimum AI match score  
-- remote/hybrid  
-- full‑time  
-
-### Saved jobs
-Users can maintain a saved list with:
-
-- save job  
-- remove job  
-- export saved jobs to CSV  
-
-### Status tracking
-Each saved job can be assigned a status:
-
-- Not applied  
-- Applied  
-- Interview  
-- Rejected  
-
-### Application Pack
-For saved jobs, the app can generate:
-
-- short motivation  
-- cover letter  
-- CV tailoring suggestions  
-
-### Export options
-Supported export formats:
-
-- search results → CSV  
-- saved jobs → CSV  
-- application packs → TXT  
-
-### Search diagnostics
-After each search, the app displays:
-
-- fetch status per source  
-- number of extracted jobs per source  
-- jobs before duplicate filtering  
-- jobs after duplicate filtering  
-- jobs after AI score filtering  
-- jobs after UI filters  
+- source fetch status
+- source URL or API endpoint
+- number of jobs extracted
+- number of fallback search results
+- number of rejected fallback results
+- jobs before and after deduplication
+- jobs after score filtering
+- returned result count
 
 ---
 
-## How it works
+## Tech Stack
 
-### 1. CV input
-The user uploads a CV or pastes profile text.
-
-### 2. Job search
-The app constructs search URLs for multiple job boards.
-
-### 3. Fetch & extraction
-Job pages are fetched via the Linkup API, which returns readable text/markdown.
-
-### 4. AI extraction
-Gemini extracts structured job postings from raw page content.
-
-### 5. AI scoring
-Each job is evaluated against the CV using recruiter‑style logic.
-
-### 6. User workflow
-Users can:
-
-- review results  
-- save jobs  
-- set status  
-- generate application packs  
-- export data  
+- Python
+- Streamlit
+- Pydantic
+- SQLModel / SQLite
+- httpx
+- OpenAI-compatible Gemini API
+- Linkup API for experimental fallback fetching/search
+- JobTech JobSearch API for Platsbanken
+- PyMuPDF
+- python-docx
 
 ---
 
-## Tech stack
+## Project Structure
 
-- Python  
-- Streamlit  
-- OpenAI‑compatible Gemini API  
-- Linkup API  
-- httpx  
-- Pydantic  
-- PyMuPDF  
-- python-docx  
-
----
-
-## Project structure
-
-```
+```text
 .
-├── app.py
-├── models.py
-├── services/
-│   ├── __init__.py
-│   ├── ai_client.py
-│   ├── application_pack.py
-│   ├── cv_parser.py
-│   ├── job_fetcher.py
-│   └── job_scoring.py
-├── utils/
-│   ├── __init__.py
-│   ├── export.py
-│   └── job_state.py
-└── requirements.txt
+|-- app.py
+|-- db.py
+|-- models.py
+|-- requirements.txt
+|-- services/
+|   |-- ai_client.py
+|   |-- application_pack.py
+|   |-- cv_parser.py
+|   |-- interview_practice.py
+|   |-- job_fetcher.py
+|   |-- job_scoring.py
+|   |-- resume_scanner.py
+|   |-- resume_tailor.py
+|   |-- storage.py
+|   `-- job_sources/
+|       |-- __init__.py
+|       `-- platsbanken.py
+|-- ui/
+|   |-- interview_tab.py
+|   |-- profile_input.py
+|   |-- results_tab.py
+|   |-- saved_jobs_tab.py
+|   |-- scanner_tab.py
+|   |-- sidebar.py
+|   `-- tailored_resume_tab.py
+|-- utils/
+|   |-- export.py
+|   `-- job_state.py
+`-- .streamlit/
+    `-- secrets.example.toml
 ```
 
 ---
 
-## Example workflow
+## Configuration
 
-1. Upload your CV  
-2. Enter job title and location  
-3. Start the search  
-4. Review match scores and recommendations  
-5. Save interesting jobs  
-6. Set job status  
-7. Generate application packs  
-8. Copy or download the generated content  
-9. Apply  
+The app needs API keys for AI features and fallback source fetching.
 
----
+Create Streamlit secrets with:
 
-## Current capabilities
+```toml
+GEMINI_API_KEY = "your-gemini-api-key"
+LINKUP_API_KEY = "your-linkup-api-key"
+```
 
-The app currently supports:
+For Streamlit Cloud, add these values in the app's Secrets settings.
 
-- multiple job sources  
-- AI‑based job extraction  
-- AI‑based CV matching  
-- per‑source diagnostics  
-- saved jobs  
-- status tracking  
-- AI‑generated application packs  
-- CSV/TXT export  
+Do not commit real secrets. The repo should only contain `.streamlit/secrets.example.toml`.
 
 ---
 
-## Known limitations
+## Running Locally
 
-- Job boards may change HTML structure or block traffic  
-- AI extraction depends on how readable the source content is  
-- Match score is heuristic, not absolute truth  
-- Application Pack may require manual refinement  
-- Session state is temporary and not a real database  
-- No dedicated “copy to clipboard” button yet  
+Install dependencies:
 
----
+```bash
+pip install -r requirements.txt
+```
 
-## Roadmap
+Run the app:
 
-Potential next steps:
-
-- UI polish  
-- enhanced diagnostics  
-- more export formats  
-- database‑backed storage  
-- favorite filters and sorting  
-- copy‑buttons  
-- improved CV tailoring  
-- better per‑source error handling  
-- deployment improvements  
+```bash
+streamlit run app.py
+```
 
 ---
 
-## Safety & design principles
+## Example Workflow
 
-The Application Pack is intentionally designed to **avoid**:
+1. Upload or paste a CV.
+2. Enter a job title and location.
+3. Choose job sources.
+4. Start the search.
+5. Review ranked matches and diagnostics.
+6. Save interesting jobs.
+7. Scan or tailor the CV.
+8. Generate application material.
+9. Practice interview questions.
+10. Track saved job status.
 
-- inventing experience  
-- inventing education  
-- inventing certifications  
-- overly fluffy or unrealistic writing  
+---
 
-The goal is to help users write stronger applications without generating false credentials.
+## Current Development Focus
+
+The current priority is reliability before adding more automation.
+
+Recent direction:
+
+- use structured APIs where possible
+- make Platsbanken reliable through JobTech API
+- keep Indeed/LinkedIn as experimental fallback sources
+- reduce dependence on AI extraction for job fetching
+- keep AI for scoring, resume analysis, tailoring, and interview preparation
+- continue moving durable product data out of `st.session_state`
+
+Recommended next improvements:
+
+- pass the user search query into fallback scoring
+- improve Platsbanken ranking and source diagnostics labels
+- make AI scoring cheaper and more robust
+- add better source adapters for each job provider
+- improve SQLite persistence and saved search history
+- polish the scanner and CV builder UX
 
 ---
 
-## Why this project exists
+## Known Limitations
 
-Job searching is often repetitive, messy, and time‑consuming. This project was created to reduce manual work by combining:
-
-- web data retrieval  
-- AI‑based structuring  
-- CV matching  
-- application support  
-- simple tracking  
+- Indeed and LinkedIn are unreliable through scraping/fallback search.
+- Fallback scoring is keyword-based and less accurate than AI scoring.
+- AI features depend on Gemini API availability and quota.
+- Some source results may be broad or weak matches before scoring.
+- SQLite persistence is still early and not a full production data layer.
+- Streamlit Cloud file persistence may not behave like a production database.
 
 ---
+
+## Safety Principles
+
+The app should not invent user credentials.
+
+Generated CV and application content should avoid:
+
+- invented work experience
+- invented education
+- invented certifications
+- invented achievements
+- unrealistic claims
+
+The goal is to help users present real experience more clearly, not fabricate qualifications.
+
+---
+
+## Why This Exists
+
+Job searching is repetitive and fragmented. JobSearchAgent is being built to combine job discovery, CV matching, ATS feedback, tailoring, interview preparation, and application tracking in one practical assistant.
