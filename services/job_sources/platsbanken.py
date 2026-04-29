@@ -30,7 +30,8 @@ def clean_text(value: Any) -> str:
 
 
 def build_location(hit: dict[str, Any]) -> str:
-    municipality = clean_text(get_nested(hit, "workplace_address", "municipality"))
+    municipality = clean_text(get_nested(
+        hit, "workplace_address", "municipality"))
     region = clean_text(get_nested(hit, "workplace_address", "region"))
     country = clean_text(get_nested(hit, "workplace_address", "country"))
 
@@ -43,7 +44,8 @@ def build_description(hit: dict[str, Any]) -> str:
     if description:
         return description
 
-    text_formatted = clean_text(get_nested(hit, "description", "text_formatted"))
+    text_formatted = clean_text(get_nested(
+        hit, "description", "text_formatted"))
     if text_formatted:
         return text_formatted
 
@@ -69,14 +71,44 @@ def build_application_url(hit: dict[str, Any]) -> str | None:
 def map_jobtech_hit_to_job_listing(hit: dict[str, Any]) -> JobListing:
     return JobListing(
         title=clean_text(hit.get("headline")) or "Okänd titel",
-        company=clean_text(get_nested(hit, "employer", "name")) or "Okänt företag",
+        company=clean_text(get_nested(
+            hit, "employer", "name")) or "Okänt företag",
         location=build_location(hit) or "Ej angivet",
         description=build_description(hit) or "Ingen beskrivning tillgänglig.",
         application_url=build_application_url(hit),
         work_mode=clean_text(get_nested(hit, "workplace_type", "label")),
-        employment_type=clean_text(get_nested(hit, "employment_type", "label")),
+        employment_type=clean_text(get_nested(
+            hit, "employment_type", "label")),
         source_platform="Platsbanken",
     )
+
+
+def normalize_text(value: str) -> str:
+    return " ".join((value or "").lower().split())
+
+
+def matches_location(job: JobListing, location: str) -> bool:
+    wanted_location = normalize_text(location)
+
+    if not wanted_location:
+        return True
+
+    job_location = normalize_text(job.location or "")
+    return wanted_location in job_location
+
+
+def matches_search_query(job: JobListing, query: str) -> bool:
+    query_terms = [
+        term
+        for term in normalize_text(query).split()
+        if len(term) >= 2
+    ]
+
+    if not query_terms:
+        return True
+
+    haystack = normalize_text(f"{job.title} {job.description}")
+    return all(term in haystack for term in query_terms)
 
 
 async def search_platsbanken_jobs(
@@ -89,7 +121,7 @@ async def search_platsbanken_jobs(
     limit = max(1, min(limit, 100))
     offset = (page - 1) * limit
 
-    search_query = " ".join(part for part in [query.strip(), location.strip()] if part)
+    search_query = query.strip()
 
     params = {
         "q": search_query,
@@ -129,9 +161,16 @@ async def search_platsbanken_jobs(
             if isinstance(hit, dict)
         ]
 
+        jobs = [
+            job
+            for job in jobs
+            if matches_location(job, location) and matches_search_query(job, query)
+        ]
+
         diagnostics["fetched"] = True
         diagnostics["jobs_extracted"] = len(jobs)
         diagnostics["search_results_found"] = len(hits)
+        diagnostics["fallback_results_rejected"] = len(hits) - len(jobs)
 
         return jobs, diagnostics
 
