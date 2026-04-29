@@ -50,28 +50,31 @@ def apply_fallback_scores(jobs: list[JobListing], skills: str) -> list[JobListin
     for job in jobs:
         title_words = normalize_words(job.title or "")
         description_words = normalize_words(job.description or "")
-        job_words = title_words | description_words
 
-        overlap = cv_words & job_words
         title_overlap = cv_words & title_words
+        description_overlap = cv_words & description_words
 
-        score = min(
-            100,
-            20 + (len(overlap) * 4) + (len(title_overlap) * 8),
-        )
+        score = 15
+        score += min(len(title_overlap) * 10, 35)
+        score += min(len(description_overlap) * 2, 30)
 
-        if not overlap:
-            score = 10
+        if job.source_platform == "Platsbanken":
+            score += 5
+
+        if not title_overlap and len(description_overlap) < 3:
+            score = 20
+
+        score = min(score, 80)
 
         job.match_score = score
         job.match_strengths = [
-            f"Matchar {len(overlap)} ord eller begrepp från CV:t.",
+            f"Matchar {len(title_overlap)} ord i titeln och {len(description_overlap)} ord i annonsen från CV:t.",
         ]
         job.match_gaps = [
-            "AI-score kunde inte köras, så detta är en enkel nyckelordsbaserad bedömning.",
+            "Detta är en förenklad nyckelordsbedömning eftersom AI-score inte kunde köras.",
         ]
         job.match_recommendation = (
-            "Granska annonsen manuellt och kör AI-score igen när API-kvoten fungerar."
+            "Använd som preliminär ranking. Kör AI-score igen när API-kvoten fungerar."
         )
 
     jobs.sort(key=lambda item: item.match_score or 0, reverse=True)
